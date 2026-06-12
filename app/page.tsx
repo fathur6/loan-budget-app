@@ -221,7 +221,7 @@ export default async function Home({
   const nextMonthStr = `${nextMonthDate.getFullYear()}-${String(nextMonthDate.getMonth() + 1).padStart(2, '0')}-01`;
   const nextMonthLabel = nextMonthDate.toLocaleDateString('en-MY', { month: 'short', year: 'numeric' }).toUpperCase();
 
-  const historyMonths = [];
+  const historyMonths: { label: string; monthId: string; yearStr: string }[] = [];
   for (let i = 11; i >= 0; i--) {
     const d = new Date(year, monthIndex - i, 1);
     historyMonths.push({
