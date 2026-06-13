@@ -275,6 +275,65 @@ async function transferFromPool(formData: FormData) {
 }
 
 // --- BSKL Investment Server Actions (Holidays & Contracts) ---
+async function addBsklContract(formData: FormData) {
+  'use server'
+  const supabasePath = "./supabase"
+  const cachePath = "next/cache"
+  const { supabase } = await import(supabasePath)
+  const { revalidatePath } = await import(cachePath)
+
+  const name = formData.get('name') as string
+  const capital = Number(formData.get('capital') ?? 0)
+  const rate = Number(formData.get('rate') ?? 0)
+  const effectiveDate = formData.get('effectiveDate') as string
+
+  await supabase.from('bskl_contracts').insert({
+    name,
+    capital_injection: capital,
+    daily_rate: rate,
+    effective_date: effectiveDate,
+    is_active: true
+  })
+  revalidatePath('/')
+}
+
+async function endBsklContract(formData: FormData) {
+  'use server'
+  const supabasePath = "./supabase"
+  const cachePath = "next/cache"
+  const { supabase } = await import(supabasePath)
+  const { revalidatePath } = await import(cachePath)
+
+  const id = formData.get('id') as string
+  const endDate = new Date().toISOString().split('T')[0] 
+  
+  await supabase.from('bskl_contracts').update({ 
+    is_active: false, 
+    end_date: endDate 
+  }).eq('id', id)
+  revalidatePath('/')
+}
+
+async function toggleBsklPayment(formData: FormData) {
+  'use server'
+  const supabasePath = "./supabase"
+  const cachePath = "next/cache"
+  const { supabase } = await import(supabasePath)
+  const { revalidatePath } = await import(cachePath)
+
+  const contractId = formData.get('contract_id') as string
+  const dateStr = formData.get('date') as string
+  const amount = Number(formData.get('amount') ?? 0)
+  const isPaid = formData.get('isPaid') === 'true'
+  
+  if (isPaid) {
+    await supabase.from('bskl_payments').delete().match({ contract_id: contractId, paid_date: dateStr })
+  } else {
+    await supabase.from('bskl_payments').insert({ contract_id: contractId, paid_date: dateStr, amount })
+  }
+  revalidatePath('/')
+}
+
 async function addBsklHoliday(formData: FormData) {
   'use server'
   const supabasePath = "./supabase"
@@ -445,6 +504,7 @@ export default async function Home(props: any = {}) {
   const paidLoansStatementTotal = debts?.reduce((s: number, d: any) => {
     const payment = allDebtPayments.find((dp: any) => dp.debt_id == d.id && dp.paid_month === currentMonthId);
     if (payment) {
+      // Use the explicitly paid custom amount if present, else fallback to standard calculation
       return s + (payment.amount_paid ? Number(payment.amount_paid) : (n(d.monthly_due) + n(d.arrears_balance) - n(d.float_balance)));
     }
     return s;
@@ -881,7 +941,7 @@ export default async function Home(props: any = {}) {
               <div className="relative z-10">
                 <div className="flex justify-between items-start mb-2">
                   <p className="text-[10px] sm:text-[11px] text-[#8a93a6] font-semibold uppercase tracking-[0.15em]">Liquidity Pool</p>
-                  <span className="border border-teal-500/30 text-teal-400 bg-teal-500/10 px-2 py-0.5 sm:py-1 rounded text-[8px] sm:text-[9px] font-bold uppercase tracking-widest flex items-center gap-1">
+                  <span className="border border-teal-500/30 text-teal-400 bg-teal-500/10 px-2.5 py-0.5 sm:py-1 rounded text-[8px] sm:text-[9px] font-bold uppercase tracking-widest flex items-center gap-1">
                     <span className="w-1 h-1 rounded-full bg-teal-400 animate-pulse"></span> LOCKED
                   </span>
                 </div>
@@ -947,7 +1007,7 @@ export default async function Home(props: any = {}) {
                         </div>
                         <div>
                           <label className="text-[9px] text-[#8a93a6] block mb-1.5 uppercase tracking-widest font-bold">Facility Limit</label>
-                          <input name="original_loan_amount" type="number" step="0.01" required className="w-full bg-[#0b0e14] border border-[#272b38] rounded-lg px-2.5 py-2 text-white text-xs outline-none focus:border-amber-500/50 transition-colors" />
+                          <input name="original_loan_amount" type="number" step="0.01" required className="w-full bg-[#0b0e14] border border-[#272b38] rounded-lg px-2.5 py-3 text-white text-xs outline-none focus:border-amber-500/50 transition-colors" />
                         </div>
                       </div>
                     </div>
