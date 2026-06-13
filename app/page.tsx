@@ -15,7 +15,12 @@ async function toggleDebt(formData: FormData) {
   if (isPaid) {
     await supabase.from('debt_payments').delete().match({ debt_id: debtId, paid_month: monthId })
   } else {
-    await supabase.from('debt_payments').insert({ debt_id: debtId, paid_month: monthId })
+    const amountPaid = Number(formData.get('amountPaid') ?? 0)
+    await supabase.from('debt_payments').insert({ 
+      debt_id: debtId, 
+      paid_month: monthId,
+      amount_paid: amountPaid
+    })
   }
   revalidatePath('/')
 }
@@ -270,65 +275,6 @@ async function transferFromPool(formData: FormData) {
 }
 
 // --- BSKL Investment Server Actions (Holidays & Contracts) ---
-async function addBsklContract(formData: FormData) {
-  'use server'
-  const supabasePath = "./supabase"
-  const cachePath = "next/cache"
-  const { supabase } = await import(supabasePath)
-  const { revalidatePath } = await import(cachePath)
-
-  const name = formData.get('name') as string
-  const capital = Number(formData.get('capital') ?? 0)
-  const rate = Number(formData.get('rate') ?? 0)
-  const effectiveDate = formData.get('effectiveDate') as string
-
-  await supabase.from('bskl_contracts').insert({
-    name,
-    capital_injection: capital,
-    daily_rate: rate,
-    effective_date: effectiveDate,
-    is_active: true
-  })
-  revalidatePath('/')
-}
-
-async function endBsklContract(formData: FormData) {
-  'use server'
-  const supabasePath = "./supabase"
-  const cachePath = "next/cache"
-  const { supabase } = await import(supabasePath)
-  const { revalidatePath } = await import(cachePath)
-
-  const id = formData.get('id') as string
-  const endDate = new Date().toISOString().split('T')[0] 
-  
-  await supabase.from('bskl_contracts').update({ 
-    is_active: false, 
-    end_date: endDate 
-  }).eq('id', id)
-  revalidatePath('/')
-}
-
-async function toggleBsklPayment(formData: FormData) {
-  'use server'
-  const supabasePath = "./supabase"
-  const cachePath = "next/cache"
-  const { supabase } = await import(supabasePath)
-  const { revalidatePath } = await import(cachePath)
-
-  const contractId = formData.get('contract_id') as string
-  const dateStr = formData.get('date') as string
-  const amount = Number(formData.get('amount') ?? 0)
-  const isPaid = formData.get('isPaid') === 'true'
-  
-  if (isPaid) {
-    await supabase.from('bskl_payments').delete().match({ contract_id: contractId, paid_date: dateStr })
-  } else {
-    await supabase.from('bskl_payments').insert({ contract_id: contractId, paid_date: dateStr, amount })
-  }
-  revalidatePath('/')
-}
-
 async function addBsklHoliday(formData: FormData) {
   'use server'
   const supabasePath = "./supabase"
@@ -382,14 +328,13 @@ export default async function Home(props: any = {}) {
   if (!sp) sp = {};
 
   const currentSelectedMonth = sp.month || '2026-06-01'
-  const currentMonthId = currentSelectedMonth.substring(0, 7) // e.g. "2026-06"
+  const currentMonthId = currentSelectedMonth.substring(0, 7)
   const expandedDebtId = sp.details
   const bsklModalDate = sp.bsklModal 
   const isLogOpen = sp.log === 'true'
   const editLogId = sp.editLog
   const n = (v: any) => Number(v ?? 0)
 
-  // Default fallbacks to prevent Canvas runtime crashes
   let isReadOnly = false;
   let debts: any[] = [];
   let allDebtPayments: any[] = [];
@@ -458,12 +403,12 @@ export default async function Home(props: any = {}) {
       if (d10) budgetTransactions = d10;
     }
   } catch (error) {
-    // Ralat diabaikan secara senyap khusus untuk paparan statik Canvas.
+    // Canvas rendering protection
   }
   
   const isEditing = !isReadOnly && sp.edit === 'true'
 
-  // Perpetual Calendar Engine
+  // Calendar Engines
   const year = parseInt(currentSelectedMonth.split('-')[0]);
   const monthIndex = parseInt(currentSelectedMonth.split('-')[1]) - 1;
   const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
@@ -496,7 +441,14 @@ export default async function Home(props: any = {}) {
   }, 0) ?? 0
 
   const paidLoansThisMonth = debts?.filter((d: any) => allDebtPayments.some((dp: any) => dp.debt_id == d.id && dp.paid_month === currentMonthId)).reduce((s: number, d: any) => s + n(d.monthly_due), 0) ?? 0;
-  const paidLoansStatementTotal = debts?.filter((d: any) => allDebtPayments.some((dp: any) => dp.debt_id == d.id && dp.paid_month === currentMonthId)).reduce((s: number, d: any) => s + (n(d.monthly_due) + n(d.arrears_balance) - n(d.float_balance)), 0) ?? 0;
+  
+  const paidLoansStatementTotal = debts?.reduce((s: number, d: any) => {
+    const payment = allDebtPayments.find((dp: any) => dp.debt_id == d.id && dp.paid_month === currentMonthId);
+    if (payment) {
+      return s + (payment.amount_paid ? Number(payment.amount_paid) : (n(d.monthly_due) + n(d.arrears_balance) - n(d.float_balance)));
+    }
+    return s;
+  }, 0) ?? 0;
 
   // --- BSKL CALCULATIONS ---
   let totalBsklCapitalOutflowThisMonth = 0;
@@ -568,7 +520,7 @@ export default async function Home(props: any = {}) {
     year: 'numeric',
   }).toUpperCase()
 
-  // --- LEDGER UNIFIED CONSTRUCTION ---
+  // --- CENTRALIZED TRANSACTION LOG ENGINE ---
   let systemLogs: any[] = [];
   
   budgetTransactions.forEach((t: any) => {
@@ -605,7 +557,7 @@ export default async function Home(props: any = {}) {
         id: dp.id || `${dp.debt_id}-${dp.paid_month}`,
         date: dp.created_at || `${currentMonthId}-01T00:00:00Z`,
         description: `Debt Paid: ${d.creditor}`,
-        amount: Number(d.monthly_due),
+        amount: dp.amount_paid ? Number(dp.amount_paid) : (n(d.monthly_due) + n(d.arrears_balance) - n(d.float_balance)),
         type: 'out',
         source: 'debt',
         raw: { debt_id: dp.debt_id, paid_month: dp.paid_month }
@@ -641,21 +593,9 @@ export default async function Home(props: any = {}) {
           color: #e2e8f0 !important; 
           color-scheme: dark !important; 
         }
-        /* Custom scrollbar style for tactical feel */
-        ::-webkit-scrollbar {
-          width: 5px;
-          height: 5px;
-        }
-        ::-webkit-scrollbar-track {
-          background: #0b0e14;
-        }
-        ::-webkit-scrollbar-thumb {
-          background: #272b38;
-          border-radius: 9999px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-          background: #383e52;
-        }
+        ::-webkit-scrollbar { width: 5px; height: 5px; }
+        ::-webkit-scrollbar-track { background: #0b0e14; }
+        ::-webkit-scrollbar-thumb { background: #272b38; border-radius: 9999px; }
       `}} />
 
       <main className="min-h-screen bg-[#0b0e14] text-slate-200 antialiased font-sans w-full max-w-[1600px] mx-auto pb-16 relative">
@@ -699,7 +639,6 @@ export default async function Home(props: any = {}) {
                       <input type="hidden" name="date" value={bsklModalDate} />
                       <input type="hidden" name="amount" value={c.daily_rate} />
                       <input type="hidden" name="isPaid" value={String(isPaid)} />
-                      
                       <div>
                         <p className={`font-bold ${isPaid ? 'text-teal-400' : 'text-white'}`}>{c.name}</p>
                         <p className="text-[10px] text-[#8a93a6] uppercase tracking-widest mt-1">RM {n(c.daily_rate).toFixed(2)}</p>
@@ -748,7 +687,6 @@ export default async function Home(props: any = {}) {
 
               <div className="p-4 sm:p-6 overflow-y-auto space-y-4 flex-1">
                 {systemLogs.length === 0 && <p className="text-[#8a93a6] text-sm text-center py-10">No transactions recorded for this cycle yet.</p>}
-                
                 {systemLogs.map(log => {
                    const isEditingLog = editLogId === log.id;
                    return (
@@ -764,7 +702,6 @@ export default async function Home(props: any = {}) {
                            </p>
                          </div>
                        </div>
-                       
                        {!isReadOnly && (
                          <div className="flex justify-end gap-2 border-t border-[#272b38] pt-3 mt-1">
                            {(log.source === 'budget' || log.source === 'transfer') && !isEditingLog && (
@@ -788,7 +725,7 @@ export default async function Home(props: any = {}) {
                            <input type="hidden" name="source" value={log.source} />
                            <input type="number" step="0.01" name="amount" defaultValue={log.amount.toFixed(2)} className="flex-1 bg-[#161a23] border border-[#383e52] rounded-lg px-3 py-2 text-white text-xs outline-none focus:border-amber-500/50" />
                            <button type="submit" className="text-[9px] uppercase tracking-widest font-bold px-4 py-2 bg-amber-500/10 text-amber-400 border border-amber-500/30 rounded-lg hover:bg-amber-500/20 transition-colors">Save</button>
-                           <a href={`?month=${currentSelectedMonth}&log=true${isEditing ? '&edit=true' : ''}`} className="text-[9px] uppercase tracking-widest font-bold px-4 py-2 bg-[#161a23] text-[#8a93a6] border border-[#383e52] rounded-lg hover:text-white flex items-center transition-colors">Cancel</a>
+                           <a href={`?month=${currentSelectedMonth}&log=true${isEditing ? '&edit=true' : ''}`} className="text-[9px] uppercase tracking-widest font-bold px-4 py-2 bg-[#161a23] text-[#8a93a6] border-[#383e52] rounded-lg hover:text-white flex items-center transition-colors">Cancel</a>
                          </form>
                        )}
                      </div>
@@ -862,7 +799,6 @@ export default async function Home(props: any = {}) {
                 <p className={`text-2xl sm:text-3xl md:text-4xl font-bold mt-2 tracking-tight ${currentCheckingBalance < 0 ? 'text-rose-400' : 'text-amber-400'}`}>
                   RM {currentCheckingBalance.toLocaleString('en-MY', { minimumFractionDigits: 2 })}
                 </p>
-                
                 {!isReadOnly && (
                   <form action={updateSalary} className="flex gap-2 mt-4 sm:mt-5">
                     <input type="hidden" name="monthId" value={currentMonthId} />
@@ -870,7 +806,6 @@ export default async function Home(props: any = {}) {
                     <button type="submit" className="bg-[#272b38] text-white px-2.5 py-2 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-[#383e52] transition-colors">SET</button>
                   </form>
                 )}
-
                 <div className="space-y-1.5 font-medium text-[#8a93a6] mt-4 text-[9px] border-t border-[#272b38]/50 pt-3">
                   <div className="flex justify-between items-center"><span className="uppercase tracking-widest">Salary IN</span> <span className="text-teal-400 font-mono">+{currentSalary.toFixed(2)}</span></div>
                   <div className="flex justify-between items-center border-b border-[#272b38] pb-1.5"><span className="uppercase tracking-widest">Pool Transf. IN</span> <span className="text-teal-400 font-mono">+{poolTransfersInThisMonth.toFixed(2)}</span></div>
@@ -888,7 +823,6 @@ export default async function Home(props: any = {}) {
                 <p className="text-2xl sm:text-3xl md:text-4xl font-bold text-white tracking-tight">
                   RM {totalRemainingBalance.toLocaleString('en-MY', { minimumFractionDigits: 2 })}
                 </p>
-                
                 <a href={`?month=${currentSelectedMonth}&log=true${isEditing ? '&edit=true' : ''}`} className="mt-3 inline-flex items-center gap-1.5 text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-teal-400 bg-teal-500/10 border border-teal-500/30 px-3 sm:px-4 py-2 rounded-lg hover:bg-teal-500/20 transition-colors shadow-[0_0_10px_rgba(20,184,166,0.1)]">
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                   Transaction Log
@@ -923,7 +857,6 @@ export default async function Home(props: any = {}) {
                     TARGET <span className="text-white font-mono">{yearlyTotalAllocated.toLocaleString('en-MY', { minimumFractionDigits: 2 })}</span>
                   </p>
                 </div>
-                
                 <div className="relative w-14 h-14 sm:w-16 sm:h-16 md:w-20 md:h-20 flex-shrink-0 ml-2">
                   <svg className="w-full h-full transform -rotate-90 drop-shadow-[0_0_8px_rgba(45,212,191,0.3)]" viewBox="0 0 36 36">
                     <circle cx="18" cy="18" r="15.9155" fill="transparent" stroke="#272b38" strokeWidth="4"></circle>
@@ -956,7 +889,6 @@ export default async function Home(props: any = {}) {
                   RM {currentPoolBalance.toLocaleString('en-MY', { minimumFractionDigits: 2 })}
                 </p>
               </div>
-
               <div className="relative z-10 mt-4 sm:mt-5">
                 {!isReadOnly && (
                   <form action={transferFromPool} className="flex gap-2">
@@ -965,7 +897,6 @@ export default async function Home(props: any = {}) {
                     <button type="submit" disabled={currentPoolBalance <= 0} className="bg-[#272b38] text-white px-2.5 py-2 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-[#383e52] transition-colors disabled:opacity-50">MOVE</button>
                   </form>
                 )}
-
                 <div className="space-y-1.5 font-medium text-[#8a93a6] mt-4 text-[9px] border-t border-[#272b38]/50 pt-3">
                   <div className="flex justify-between items-center"><span className="uppercase tracking-widest">Total Pooled IN</span> <span className="text-teal-400 font-mono">+{totalSavedAcrossAllMonths.toFixed(2)}</span></div>
                   <div className="flex justify-between items-center"><span className="uppercase tracking-widest">Trade Returns IN</span> <span className="text-teal-400 font-mono">+{totalBsklRepaidAllTime.toFixed(2)}</span></div>
@@ -984,18 +915,10 @@ export default async function Home(props: any = {}) {
               <div className="bg-[#161a23] border border-amber-500/30 rounded-2xl p-4 sm:p-6 md:p-8 space-y-6">
                 <h3 className="text-xs font-bold uppercase text-amber-400 tracking-[0.15em]">Statement Sync Utility</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6">
-                  
-                  {/* DYNAMIC DEBTS LIST */}
                   {debts?.map((debt: any) => (
                     <form key={debt.id} action={updateDebtBalances} className="p-4 sm:p-5 bg-[#0b0e14] rounded-xl border border-[#272b38] space-y-4 shadow-sm hover:border-[#383e52] transition-colors">
                       <input type="hidden" name="id" value={debt.id} />
-                      <input 
-                        type="text" 
-                        name="creditor" 
-                        defaultValue={debt.creditor} 
-                        className="w-full bg-transparent font-bold text-white text-sm outline-none border-b border-transparent focus:border-amber-500/50 pb-1 transition-colors" 
-                        placeholder="Liability Name"
-                      />
+                      <input type="text" name="creditor" defaultValue={debt.creditor} className="w-full bg-transparent font-bold text-white text-sm outline-none border-b border-transparent focus:border-amber-500/50 pb-1 transition-colors" placeholder="Liability Name" />
                       <div className="grid grid-cols-2 gap-3 sm:gap-4">
                         <div>
                           <label className="text-[9px] text-[#8a93a6] block mb-1.5 uppercase tracking-widest font-bold">Arrears (RM)</label>
@@ -1010,7 +933,6 @@ export default async function Home(props: any = {}) {
                     </form>
                   ))}
 
-                  {/* ADD NEW LIABILITY FORM */}
                   <form action={addDebt} className="p-4 sm:p-5 bg-[#161a23] rounded-xl border border-dashed border-[#383e52] space-y-4 shadow-sm hover:border-amber-500/50 transition-colors flex flex-col justify-center">
                     <p className="font-bold text-amber-400 text-sm border-b border-amber-500/20 pb-1">+ Add New Liability</p>
                     <div className="space-y-3 sm:space-y-4">
@@ -1031,7 +953,6 @@ export default async function Home(props: any = {}) {
                     </div>
                     <button type="submit" className="w-full bg-amber-500/10 text-amber-400 border border-amber-500/30 hover:bg-amber-500/20 font-bold py-2.5 rounded-lg transition-colors text-[10px] uppercase tracking-widest mt-2">+ Add Liability</button>
                   </form>
-
                 </div>
               </div>
 
@@ -1039,7 +960,6 @@ export default async function Home(props: any = {}) {
               <div className="bg-[#161a23] border border-blue-500/30 rounded-2xl p-4 sm:p-6 md:p-8 space-y-6">
                 <h3 className="text-xs font-bold uppercase text-blue-400 tracking-[0.15em]">BSKL Trade Utility</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6">
-                  
                   {bsklContracts.map((c: any) => (
                     <div key={c.id} className="p-4 sm:p-5 bg-[#0b0e14] rounded-xl border border-[#272b38] space-y-4 shadow-sm hover:border-[#383e52] transition-colors flex flex-col justify-between">
                       <div>
@@ -1066,7 +986,6 @@ export default async function Home(props: any = {}) {
                           </div>
                         </div>
                       </div>
-                      
                       {c.is_active && (
                         <form action={endBsklContract}>
                           <input type="hidden" name="id" value={c.id} />
@@ -1076,7 +995,6 @@ export default async function Home(props: any = {}) {
                     </div>
                   ))}
 
-                  {/* ADD NEW BSKL CONTRACT FORM */}
                   <form action={addBsklContract} className="p-4 sm:p-5 bg-[#161a23] rounded-xl border border-dashed border-[#383e52] space-y-4 shadow-sm hover:border-blue-500/50 transition-colors flex flex-col justify-center">
                     <p className="font-bold text-blue-400 text-sm border-b border-blue-500/20 pb-1">+ New Injection</p>
                     <div className="space-y-3 sm:space-y-4">
@@ -1101,7 +1019,6 @@ export default async function Home(props: any = {}) {
                     </div>
                     <button type="submit" className="w-full bg-blue-500/10 text-blue-400 border border-blue-500/30 hover:bg-blue-500/20 font-bold py-2.5 rounded-lg transition-colors text-[10px] uppercase tracking-widest mt-2">+ Add Contract</button>
                   </form>
-
                 </div>
               </div>
 
@@ -1109,17 +1026,10 @@ export default async function Home(props: any = {}) {
               <div className="bg-[#161a23] border border-teal-500/30 rounded-2xl p-4 sm:p-6 md:p-8 space-y-6">
                 <h3 className="text-xs font-bold uppercase text-teal-400 tracking-[0.15em]">Budget Sync Utility</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6">
-                  
                   {budgets?.map((budget: any) => (
                     <form key={budget.id} action={updateBudgetSettings} className="p-4 sm:p-5 bg-[#0b0e14] rounded-xl border border-[#272b38] space-y-4 shadow-sm hover:border-[#383e52] transition-colors">
                       <input type="hidden" name="id" value={budget.id} />
-                      <input 
-                        type="text" 
-                        name="category" 
-                        defaultValue={budget.category} 
-                        className="w-full bg-transparent font-bold text-white text-sm outline-none border-b border-transparent focus:border-teal-500/50 pb-1 transition-colors" 
-                        placeholder="Budget Category Name"
-                      />
+                      <input type="text" name="category" defaultValue={budget.category} className="w-full bg-transparent font-bold text-white text-sm outline-none border-b border-transparent focus:border-teal-500/50 pb-1 transition-colors" placeholder="Budget Category Name" />
                       <div>
                         <label className="text-[9px] text-[#8a93a6] block mb-1.5 uppercase tracking-widest font-bold">Allocated (RM)</label>
                         <input name="allocated" type="number" step="0.01" defaultValue={n(budget.allocated_amount).toFixed(2)} className="w-full bg-[#161a23] border border-[#272b38] rounded-lg px-2.5 py-2 text-white text-xs outline-none focus:border-teal-500/50 transition-colors" />
@@ -1128,7 +1038,6 @@ export default async function Home(props: any = {}) {
                     </form>
                   ))}
 
-                  {/* ADD NEW BUDGET FORM */}
                   <form action={addBudget} className="p-4 sm:p-5 bg-[#161a23] rounded-xl border border-dashed border-[#383e52] space-y-4 shadow-sm hover:border-teal-500/50 transition-colors flex flex-col justify-center">
                     <input type="hidden" name="budget_month" value={currentSelectedMonth} />
                     <p className="font-bold text-teal-400 text-sm border-b border-teal-500/20 pb-1 mb-2">+ Add New Budget</p>
@@ -1144,7 +1053,6 @@ export default async function Home(props: any = {}) {
                     </div>
                     <button type="submit" className="w-full bg-teal-500/10 text-teal-400 border border-teal-500/30 hover:bg-teal-500/20 font-bold py-2.5 rounded-lg transition-colors text-[10px] uppercase tracking-widest mt-2">+ Add Budget</button>
                   </form>
-
                 </div>
               </div>
 
@@ -1152,7 +1060,6 @@ export default async function Home(props: any = {}) {
               <div className="bg-[#161a23] border border-emerald-500/30 rounded-2xl p-4 sm:p-6 md:p-8 space-y-6">
                 <h3 className="text-xs font-bold uppercase text-emerald-400 tracking-[0.15em]">BSKL Holidays Utility</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6">
-                  
                   {bsklHolidays.map((h: any) => (
                     <div key={h.id} className="p-4 bg-[#0b0e14] rounded-xl border border-[#272b38] flex justify-between items-center shadow-sm">
                       <div>
@@ -1180,7 +1087,6 @@ export default async function Home(props: any = {}) {
                     </div>
                     <button type="submit" className="w-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20 font-bold py-2.5 rounded-lg transition-colors text-[10px] uppercase tracking-widest mt-3">+ Add</button>
                   </form>
-
                 </div>
               </div>
 
@@ -1199,9 +1105,14 @@ export default async function Home(props: any = {}) {
               
               <div className="space-y-4">
                 {debts?.map((debt: any) => {
-                  const debtIsPaidThisMonth = allDebtPayments.some((dp: any) => dp.debt_id == debt.id && dp.paid_month === currentMonthId);
+                  const paymentRecord = allDebtPayments.find((dp: any) => dp.debt_id == debt.id && dp.paid_month === currentMonthId);
+                  const debtIsPaidThisMonth = !!paymentRecord;
                   const statementTotalDue = n(debt.monthly_due) + n(debt.arrears_balance) - n(debt.float_balance)
+                  const actualAmountPaid = paymentRecord?.amount_paid ? Number(paymentRecord.amount_paid) : statementTotalDue;
                   const isExpanded = expandedDebtId == String(debt.id)
+                  
+                  // CORRECTED ARREARS AGEING LOGIC MATCHING BANK CYCLES EXACTLY
+                  const arrearsCount = n(debt.monthly_due) > 0 ? Math.floor(n(debt.arrears_balance) / n(debt.monthly_due)) : 0;
                   
                   return (
                     <div key={debt.id} className={`rounded-xl border transition-all duration-300 overflow-hidden ${debtIsPaidThisMonth ? 'border-[#272b38] bg-[#0b0e14] opacity-60' : 'border-[#272b38] bg-[#161a23]'} ${isExpanded ? 'border-teal-500/50 shadow-[0_0_15px_rgba(20,184,166,0.1)]' : ''}`}>
@@ -1209,7 +1120,11 @@ export default async function Home(props: any = {}) {
                         <div className="space-y-1 sm:space-y-2">
                           <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
                             <span className="font-bold text-base sm:text-lg tracking-tight text-white leading-tight">{debt.creditor}</span>
-                            {n(debt.arrears_balance) > 0 && !debtIsPaidThisMonth && <span className="text-[8px] sm:text-[9px] bg-rose-500/10 text-rose-400 border border-rose-500/30 px-1.5 py-0.5 rounded-md font-bold uppercase tracking-widest">Arrears</span>}
+                            {arrearsCount > 0 && !debtIsPaidThisMonth && (
+                              <span className="text-[8px] sm:text-[9px] bg-rose-500/10 text-rose-400 border border-rose-500/30 px-1.5 py-0.5 rounded-md font-bold uppercase tracking-widest">
+                                Arrears (x{arrearsCount})
+                              </span>
+                            )}
                           </div>
                           {!debtIsPaidThisMonth && (
                             <div className="text-[10px] sm:text-[11px] text-[#8a93a6] font-medium space-y-0.5 sm:space-y-1">
@@ -1218,27 +1133,62 @@ export default async function Home(props: any = {}) {
                               {n(debt.float_balance) > 0 && <p className="text-teal-400">Credit: -RM {n(debt.float_balance).toFixed(2)}</p>}
                             </div>
                           )}
-                          <a href={`?month=${currentSelectedMonth}${isExpanded ? '' : `&details=${debt.id}`}`} className="text-[9px] sm:text-[10px] text-teal-400 hover:text-teal-300 mt-2 inline-block transition-colors uppercase tracking-widest font-bold">{isExpanded ? 'Hide ▲' : 'Details ▼'}</a>
+                          <a href={`?month=${currentSelectedMonth}${isExpanded ? '' : `&details=${debt.id}`}${isEditing ? '&edit=true' : ''}`} className="text-[9px] sm:text-[10px] text-teal-400 hover:text-teal-300 mt-2 inline-block transition-colors uppercase tracking-widest font-bold">{isExpanded ? 'Hide ▲' : 'Details ▼'}</a>
                         </div>
+
+                        {/* HIGHLY CUSTOM TRANSACTION-READY INPUT FIELD REPLICA */}
                         <div className="flex flex-col items-end gap-2 sm:gap-3 flex-shrink-0">
-                          <div className="text-right">
-                            <p className="font-bold text-lg sm:text-xl text-white tracking-tight">RM {statementTotalDue.toLocaleString('en-MY', { minimumFractionDigits: 2 })}</p>
-                            <p className="text-[8px] sm:text-[9px] text-[#8a93a6] font-bold uppercase tracking-widest">Statement Net</p>
-                          </div>
-                          
-                          {isReadOnly ? (
-                            <span className={`text-[8px] sm:text-[9px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-full border bg-[#0b0e14] ${debtIsPaidThisMonth ? 'text-teal-400 border-teal-500/20' : 'text-[#8a93a6] border-[#272b38]'}`}>
-                              {debtIsPaidThisMonth ? 'Settled' : 'Outstanding'}
-                            </span>
+                          {debtIsPaidThisMonth ? (
+                            <div className="flex flex-col items-end gap-1 sm:gap-1.5">
+                              <div className="text-right">
+                                <p className="font-mono text-teal-400 font-bold text-base sm:text-lg">RM {actualAmountPaid.toFixed(2)}</p>
+                                <p className="text-[8px] text-[#8a93a6] font-bold uppercase tracking-widest mt-0.5">Paid Balance</p>
+                              </div>
+                              {isReadOnly ? (
+                                <span className="text-[8px] sm:text-[9px] font-bold uppercase tracking-widest px-3 py-1 rounded-full border bg-[#0b0e14] text-teal-400 border-teal-500/20">
+                                  Settled
+                                </span>
+                              ) : (
+                                <form action={toggleDebt}>
+                                  <input type="hidden" name="id" value={debt.id} />
+                                  <input type="hidden" name="monthId" value={currentMonthId} />
+                                  <input type="hidden" name="isPaid" value="true" />
+                                  <button type="submit" className="text-[8px] sm:text-[9px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-full border bg-[#0b0e14] text-[#8a93a6] border-[#272b38] hover:bg-[#161a23] transition-all">
+                                    Undo
+                                  </button>
+                                </form>
+                              )}
+                            </div>
                           ) : (
-                            <form action={toggleDebt}>
-                              <input type="hidden" name="id" value={debt.id} />
-                              <input type="hidden" name="monthId" value={currentMonthId} />
-                              <input type="hidden" name="isPaid" value={String(debtIsPaidThisMonth)} />
-                              <button type="submit" className={`text-[8px] sm:text-[9px] font-bold uppercase tracking-widest px-3 py-1.5 sm:px-4 sm:py-2 rounded-full border transition-all ${debtIsPaidThisMonth ? 'bg-[#0b0e14] text-[#8a93a6] border-[#272b38] hover:bg-[#161a23]' : 'bg-amber-500/10 text-amber-400 border-amber-500/40 hover:bg-amber-500/20'}`}>
-                                {debtIsPaidThisMonth ? 'Undo' : 'Pay Now'}
-                              </button>
-                            </form>
+                            <div className="flex flex-col items-end gap-1">
+                              <div className="text-right mb-0.5">
+                                <p className="font-bold text-xs sm:text-sm text-slate-400 tracking-tight">Net Statement: RM {statementTotalDue.toLocaleString('en-MY', { minimumFractionDigits: 2 })}</p>
+                              </div>
+                              {isReadOnly ? (
+                                <span className="text-[8px] sm:text-[9px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-full border bg-[#0b0e14] text-[#8a93a6] border-[#272b38]">
+                                  Outstanding
+                                </span>
+                              ) : (
+                                <form action={toggleDebt} className="flex items-center gap-1.5 sm:gap-2">
+                                  <input type="hidden" name="id" value={debt.id} />
+                                  <input type="hidden" name="monthId" value={currentMonthId} />
+                                  <input type="hidden" name="isPaid" value="false" />
+                                  <div className="flex items-center bg-[#0b0e14] border border-[#272b38] rounded-lg p-0.5 focus-within:border-amber-500/50 transition-colors">
+                                    <span className="text-[#8a93a6] text-[10px] pl-2 font-mono">RM</span>
+                                    <input 
+                                      type="number" 
+                                      step="0.01" 
+                                      name="amountPaid" 
+                                      defaultValue={statementTotalDue > 0 ? statementTotalDue.toFixed(2) : '0.00'} 
+                                      className="w-16 sm:w-24 bg-transparent text-right text-white text-xs outline-none py-1 px-1.5 font-mono"
+                                    />
+                                  </div>
+                                  <button type="submit" className="text-[8px] sm:text-[9px] font-bold uppercase tracking-widest px-3 py-2 bg-amber-500/10 text-amber-400 border border-amber-500/40 hover:bg-amber-500/20 rounded-lg transition-all whitespace-nowrap">
+                                    Pay Now
+                                  </button>
+                                </form>
+                              )}
+                            </div>
                           )}
                         </div>
                       </div>
@@ -1246,7 +1196,6 @@ export default async function Home(props: any = {}) {
                       {/* DARK TACTICAL CCRIS REPLICA */}
                       {isExpanded && (
                         <div className="bg-[#0b0e14] border-t border-[#272b38] p-4 sm:p-5 md:p-6 space-y-5 sm:space-y-6">
-                          
                           <div className="flex justify-between items-start">
                             <div>
                               <h3 className="text-sm sm:text-lg font-bold text-white">{debt.creditor}</h3>
@@ -1268,11 +1217,11 @@ export default async function Home(props: any = {}) {
                           <div className="bg-[#161a23] border border-[#272b38] rounded-xl p-4 sm:p-5 md:p-6">
                             <div className="flex justify-between items-end">
                               <div>
-                                <p className="text-[9px] font-bold text-rose-400 uppercase tracking-widest">Outstanding</p>
+                                <p className="text-[9px] font-bold text-rose-400 uppercase tracking-widest">Outstanding Principal</p>
                                 <p className="text-xl sm:text-2xl font-bold text-white mt-1">RM {n(debt.total_debt_amount).toLocaleString('en-MY', { minimumFractionDigits: 2 })}</p>
                               </div>
                               <div className="text-right">
-                                <p className="text-[9px] font-bold text-[#8a93a6] uppercase tracking-widest">Limit</p>
+                                <p className="text-[9px] font-bold text-[#8a93a6] uppercase tracking-widest">Facility Limit</p>
                                 <p className="text-sm sm:text-lg font-bold text-white mt-1">RM {n(debt.original_loan_amount).toLocaleString('en-MY', { minimumFractionDigits: 2 })}</p>
                               </div>
                             </div>
@@ -1282,25 +1231,20 @@ export default async function Home(props: any = {}) {
                           </div>
 
                           <div className="border-t border-[#272b38] pt-5 sm:pt-6 mt-4 sm:mt-6">
-                            <h5 className="text-[10px] font-bold text-[#8a93a6] uppercase tracking-[0.15em] mb-4">12 Months History</h5>
+                            <h5 className="text-[10px] font-bold text-[#8a93a6] uppercase tracking-[0.15em] mb-4">12 Months Credit History</h5>
                             <div className="bg-[#161a23] border border-[#272b38] rounded-xl p-4 sm:p-5 md:p-6 overflow-hidden">
-                              
                               <div className="flex justify-between text-xs sm:text-sm font-bold text-white mb-4">
                                 <span>{histFirstYear}</span>
                                 {histFirstYear !== histLastYear && <span>{histLastYear}</span>}
                               </div>
                               
-                              {/* SWIPABLE HORIZONTAL CONTAINER FOR MOBILE SHIELD */}
                               <div className="overflow-x-auto pb-4 pt-1 -mx-2 px-2 scrollbar-thin">
                                 <div className="min-w-[480px] space-y-4">
-                                  
                                   <div className="flex justify-between text-[9px] font-bold text-[#8a93a6] uppercase">
                                     {historyMonths.map((m: any) => <span key={m.monthId} className="w-6 md:w-8 text-center">{m.label}</span>)}
                                   </div>
-                                  
                                   <div className="flex items-center">
                                     {historyMonths.map((m: any, i: number) => {
-                                      
                                       let isTracked = true;
                                       if (debt.creditor?.toLowerCase().includes('shopee')) {
                                         if (m.monthId < '2026-06') isTracked = false;
@@ -1326,11 +1270,17 @@ export default async function Home(props: any = {}) {
                                           textClass = 'text-teal-400';
                                           borderClass = 'border-teal-500/40';
                                         } else if (isMonthCurrent) {
-                                          content = '';
+                                          content = arrearsCount > 0 ? String(arrearsCount) : '0';
                                           bgClass = 'bg-[#161a23]';
                                           borderClass = 'border-[#383e52] border-dashed';
+                                          if (arrearsCount > 0) {
+                                            textClass = 'text-rose-400';
+                                            bgClass = 'bg-rose-500/5';
+                                            borderClass = 'border-rose-500/30';
+                                          }
                                         } else {
-                                          content = '1';
+                                          // Displays the verified credit index
+                                          content = arrearsCount > 0 ? String(arrearsCount) : '1';
                                           bgClass = 'bg-rose-500/10';
                                           textClass = 'text-rose-400';
                                           borderClass = 'border-rose-500/40';
@@ -1357,7 +1307,6 @@ export default async function Home(props: any = {}) {
                                       )
                                     })}
                                   </div>
-
                                 </div>
                               </div>
 
@@ -1369,7 +1318,6 @@ export default async function Home(props: any = {}) {
                               </div>
                             </div>
                           </div>
-
                         </div>
                       )}
                     </div>
@@ -1383,9 +1331,7 @@ export default async function Home(props: any = {}) {
                   <h2 className="text-[11px] font-semibold uppercase text-[#8a93a6] tracking-[0.15em]">Investment Account</h2>
                   <span className="border border-blue-500/30 text-blue-400 bg-blue-500/10 px-2.5 py-1 rounded text-[9px] font-bold uppercase tracking-widest">BSKL</span>
                 </div>
-                
                 <div className="bg-[#161a23] border border-[#272b38] rounded-xl shadow-sm overflow-hidden hover:border-[#383e52] transition-colors">
-                  
                   {enrichedContracts.length === 0 ? (
                     <div className="p-5 border-b border-[#272b38]">
                        <h3 className="text-lg font-bold text-[#8a93a6]">No Active Contracts</h3>
@@ -1413,35 +1359,28 @@ export default async function Home(props: any = {}) {
                       </div>
                     ))
                   )}
-                  
                   <div className="p-3 sm:p-6 bg-[#0b0e14]">
                     <div className="grid grid-cols-7 gap-1 sm:gap-2 mb-2">
                       {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day: string) => (
                         <div key={day} className="text-center text-[8px] sm:text-[9px] font-bold text-[#8a93a6] uppercase tracking-widest">{day}</div>
                       ))}
                     </div>
-                    
-                    {/* FLUID MOBILE FRIENDLY 7-COLUMN GRID */}
                     <div className="grid grid-cols-7 gap-1 sm:gap-2">
                       {Array.from({ length: firstDayOfWeek }).map((_, i: number) => (
                         <div key={`empty-${i}`} />
                       ))}
-                      
                       {Array.from({ length: daysInMonth }).map((_, i: number) => {
                         const day = i + 1;
                         const dateStr = `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                         const dayOfWeek = new Date(year, monthIndex, day).getDay();
-                        
                         const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
                         const isHoliday = bsklHolidays.some((h: any) => h.holiday_date === dateStr);
-                        
                         const dayContracts = enrichedContracts.filter((c: any) => {
                            if (isWeekend || isHoliday) return false;
                            const cEffDate = c.effective_date;
                            const cEndDate = c.end_date || '2099-12-31';
                            return dateStr >= cEffDate && dateStr <= cEndDate;
                         });
-                        
                         if (dayContracts.length === 0) {
                           return (
                             <div key={day} className="aspect-square rounded bg-[#0b0e14] flex flex-col items-center justify-center text-[#383e52] font-bold text-[9px] sm:text-xs border border-[#272b38]/40">
@@ -1449,48 +1388,32 @@ export default async function Home(props: any = {}) {
                             </div>
                           );
                         }
-
                         if (dayContracts.length === 1) {
                            const c = dayContracts[0];
                            const isPaid = bsklPayments.some((p: any) => p.contract_id === c.id && p.paid_date === dateStr);
-                           
                            if (isReadOnly) {
                              return (
-                               <div 
-                                 key={day} 
-                                 className={`aspect-square rounded flex flex-col items-center justify-center border p-0.5 sm:p-1 gap-0.5 ${
-                                   isPaid ? 'bg-teal-500/10 border-teal-500/30' : 'bg-[#161a23] border-[#383e52]'
-                                 }`}
-                               >
+                               <div key={day} className={`aspect-square rounded flex flex-col items-center justify-center border p-0.5 sm:p-1 gap-0.5 ${isPaid ? 'bg-teal-500/10 border-teal-500/30' : 'bg-[#161a23] border-[#383e52]'}`}>
                                  <span className={`text-[8px] sm:text-[9px] font-normal leading-none ${isPaid ? 'text-teal-400/60' : 'text-[#8a93a6]/60'}`}>{day}</span>
                                  <span className={`text-[8px] sm:text-[11px] font-bold leading-none ${isPaid ? 'text-teal-400' : 'text-[#8a93a6]'}`}>{c.daily_rate}</span>
                                </div>
                              );
                            }
-
                            return (
                              <form key={day} action={toggleBsklPayment} className="aspect-square">
                                <input type="hidden" name="contract_id" value={c.id} />
                                <input type="hidden" name="date" value={dateStr} />
                                <input type="hidden" name="amount" value={c.daily_rate} />
                                <input type="hidden" name="isPaid" value={String(isPaid)} />
-                               <button 
-                                 type="submit" 
-                                 className={`w-full h-full rounded flex flex-col items-center justify-center transition-all border p-0.5 sm:p-1 gap-0.5 ${
-                                   isPaid 
-                                     ? 'bg-teal-500/10 border-teal-500/30 hover:bg-teal-500/20' 
-                                     : 'bg-[#161a23] border-[#383e52] hover:border-amber-500/40'
-                                 }`}
-                               >
+                               <button type="submit" className={`w-full h-full rounded flex flex-col items-center justify-center transition-all border p-0.5 sm:p-1 gap-0.5 ${isPaid ? 'bg-teal-500/10 border-teal-500/30 hover:bg-teal-500/20' : 'bg-[#161a23] border-[#383e52] hover:border-amber-500/40'}`}>
                                  <span className={`text-[8px] sm:text-[9px] font-normal leading-none ${isPaid ? 'text-teal-400/60' : 'text-[#8a93a6]/60'}`}>{day}</span>
                                  <span className={`text-[8px] sm:text-[11px] font-bold leading-none ${isPaid ? 'text-teal-400' : 'text-[#8a93a6]'}`}>{c.daily_rate}</span>
                                </button>
                              </form>
                            );
                         }
-
                         return (
-                          <a key={day} href={`?month=${currentSelectedMonth}&bsklModal=${dateStr}`} className="aspect-square rounded flex flex-col items-center justify-center transition-all border bg-[#161a23] border-[#383e52] hover:border-amber-500/40 p-0.5 sm:p-1 gap-0.5">
+                          <a key={day} href={`?month=${currentSelectedMonth}&bsklModal=${dateStr}${isEditing ? '&edit=true' : ''}`} className="aspect-square rounded flex flex-col items-center justify-center transition-all border bg-[#161a23] border-[#383e52] hover:border-amber-500/40 p-0.5 sm:p-1 gap-0.5">
                              <span className="text-[8px] sm:text-[9px] font-normal text-[#8a93a6]/60 leading-none">{day}</span>
                              {dayContracts.map((c: any) => {
                                 const isPaid = bsklPayments.some((p: any) => p.contract_id === c.id && p.paid_date === dateStr);
@@ -1500,7 +1423,6 @@ export default async function Home(props: any = {}) {
                         )
                       })}
                     </div>
-
                     <div className="flex gap-3 sm:gap-4 mt-6 justify-center text-[9px] font-bold text-[#8a93a6] uppercase tracking-widest flex-wrap">
                       <span className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded bg-[#161a23] border border-[#383e52]"></div> Trading Day</span>
                       <span className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded bg-teal-500/10 border border-teal-500/30"></div> Collected</span>
@@ -1537,20 +1459,16 @@ export default async function Home(props: any = {}) {
                     const allocated = n(budget.allocated_amount);
                     const spent = n(budget.spent_amount);
                     const remaining = Math.max(0, allocated - spent);
-                    
-                    // Filter log perbelanjaan khusus untuk kad sampul ini sahaja
                     const logs = budgetTransactions.filter((t: any) => t.budget_id === budget.id);
 
                     return (
                       <div key={budget.id} className={`p-4 sm:p-5 md:p-6 flex flex-col gap-4 sm:gap-5 transition-all ${budget.is_saved ? 'bg-teal-500/5 border-l-2 border-teal-500/50' : 'hover:bg-[#1a1e28]'}`}>
-                        
                         <div className="flex justify-between items-start gap-2">
                           <span className={`text-base sm:text-lg font-bold tracking-tight leading-tight ${budget.is_saved ? 'text-[#8a93a6] line-through' : 'text-white'}`}>{budget.category}</span>
                           <span className="text-[9px] sm:text-[10px] text-[#8a93a6] font-mono bg-[#0b0e14] border border-[#272b38] px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-md uppercase tracking-wider flex-shrink-0">Allocated: RM {allocated.toFixed(2)}</span>
                         </div>
 
                         <div className="flex flex-col xl:flex-row justify-between xl:items-end gap-4 sm:gap-5">
-                          
                           {isReadOnly ? (
                             <div className="flex-1 bg-[#0b0e14] p-3 rounded-lg border border-[#272b38] xl:max-w-xs">
                               <p className="text-[9px] text-[#8a93a6] font-bold uppercase tracking-[0.1em] mb-1">Spent Amount</p>
@@ -1563,27 +1481,12 @@ export default async function Home(props: any = {}) {
                                 <input type="hidden" name="budgetId" value={budget.id} />
                                 <input type="hidden" name="currentAllocated" value={allocated} />
                                 <input type="hidden" name="currentSpent" value={spent} />
-                                
-                                <input 
-                                  name="amount" 
-                                  type="number" 
-                                  step="0.01" 
-                                  placeholder="0.00"
-                                  disabled={budget.is_saved} 
-                                  className="w-full bg-[#0b0e14] border border-[#272b38] rounded-lg px-2.5 py-2 text-white text-sm outline-none disabled:opacity-50 focus:border-amber-500/50 transition-colors" 
-                                />
-
+                                <input name="amount" type="number" step="0.01" placeholder="0.00" disabled={budget.is_saved} className="w-full bg-[#0b0e14] border border-[#272b38] rounded-lg px-2.5 py-2 text-white text-sm outline-none disabled:opacity-50 focus:border-amber-500/50 transition-colors" />
                                 {!budget.is_saved && (
                                   <div className="grid grid-cols-3 gap-2">
-                                    <button type="submit" name="actionType" value="spent" className="text-[9px] sm:text-[10px] uppercase tracking-widest font-black py-2.5 bg-rose-600/20 text-rose-400 border border-rose-500/30 rounded-lg hover:bg-rose-600 hover:text-white transition-all shadow-[0_0_8px_rgba(225,29,72,0.1)]">
-                                      Spent
-                                    </button>
-                                    <button type="submit" name="actionType" value="add" className="text-[9px] sm:text-[10px] uppercase tracking-widest font-black py-2.5 bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 rounded-lg hover:bg-emerald-600 hover:text-white transition-all shadow-[0_0_8px_rgba(16,185,129,0.1)]">
-                                      Add
-                                    </button>
-                                    <button type="submit" name="actionType" value="reduce" className="text-[9px] sm:text-[10px] uppercase tracking-widest font-black py-2.5 bg-blue-600/20 text-blue-400 border border-blue-500/30 rounded-lg hover:bg-blue-600 hover:text-white transition-all shadow-[0_0_8px_rgba(37,99,235,0.1)]">
-                                      Reduce
-                                    </button>
+                                    <button type="submit" name="actionType" value="spent" className="text-[9px] sm:text-[10px] uppercase tracking-widest font-black py-2.5 bg-rose-600/20 text-rose-400 border border-rose-500/30 rounded-lg hover:bg-rose-600 hover:text-white transition-all shadow-[0_0_8px_rgba(225,29,72,0.1)]">Spent</button>
+                                    <button type="submit" name="actionType" value="add" className="text-[9px] sm:text-[10px] uppercase tracking-widest font-black py-2.5 bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 rounded-lg hover:bg-emerald-600 hover:text-white transition-all shadow-[0_0_8px_rgba(16,185,129,0.1)]">Add</button>
+                                    <button type="submit" name="actionType" value="reduce" className="text-[9px] sm:text-[10px] uppercase tracking-widest font-black py-2.5 bg-blue-600/20 text-blue-400 border border-blue-500/30 rounded-lg hover:bg-blue-600 hover:text-white transition-all shadow-[0_0_8px_rgba(37,99,235,0.1)]">Reduce</button>
                                   </div>
                                 )}
                               </form>
@@ -1592,13 +1495,10 @@ export default async function Home(props: any = {}) {
 
                           <div className="xl:text-right bg-[#0b0e14] p-3 rounded-lg border border-[#272b38] flex-1 xl:flex-none xl:min-w-[140px]">
                             <p className="text-[9px] text-[#8a93a6] font-bold uppercase tracking-[0.1em] mb-1">Remaining</p>
-                            <p className={`font-bold text-lg sm:text-xl tracking-tight ${budget.is_saved ? 'text-teal-400/40' : 'text-teal-400'}`}>
-                              RM {remaining.toFixed(2)}
-                            </p>
+                            <p className={`font-bold text-lg sm:text-xl tracking-tight ${budget.is_saved ? 'text-teal-400/40' : 'text-teal-400'}`}>RM {remaining.toFixed(2)}</p>
                           </div>
                         </div>
 
-                        {/* SUB-LEDGER TRANSAKSI BERTARIKH (REKOD PENYATA DETIL) */}
                         {logs.length > 0 && (
                           <div className="bg-[#0b0e14] rounded-lg border border-[#272b38] p-3 space-y-1.5 font-mono text-[9px] text-[#8a93a6] max-h-[110px] overflow-y-auto">
                             <p className="text-[8px] font-bold text-slate-500 uppercase tracking-widest mb-1 border-b border-[#272b38]/50 pb-1">Sub-Ledger Transactions</p>
@@ -1607,7 +1507,6 @@ export default async function Home(props: any = {}) {
                               let colorClass = 'text-rose-400'
                               if (log.transaction_type === 'add') { prefix = '+'; colorClass = 'text-emerald-400'; }
                               if (log.transaction_type === 'reduce') { prefix = '-'; colorClass = 'text-blue-400'; }
-
                               return (
                                 <div key={log.id} className="flex justify-between items-center">
                                   <span>{new Date(log.created_at).toLocaleDateString('en-MY')}</span>
@@ -1623,17 +1522,14 @@ export default async function Home(props: any = {}) {
                           {budget.is_saved ? (
                             <div className="flex items-center gap-3 sm:gap-4 bg-[#0b0e14] px-3 py-1.5 sm:px-4 sm:py-2 rounded-full border border-[#272b38]">
                               <span className="text-[9px] uppercase tracking-widest font-bold text-teal-500 flex items-center gap-1.5">
-                                <span className="w-3 sm:w-3.5 h-3 sm:h-3.5 rounded-full bg-teal-500/20 flex items-center justify-center text-[8px] sm:text-[10px]">✓</span>
-                                In Pool
+                                <span className="w-3 sm:w-3.5 h-3 sm:h-3.5 rounded-full bg-teal-500/20 flex items-center justify-center text-[8px] sm:text-[10px]">✓</span>In Pool
                               </span>
                               {!isReadOnly && (
                                 <>
                                   <div className="w-px h-4 bg-[#272b38]"></div>
                                   <form action={undoSavings}>
                                     <input type="hidden" name="id" value={budget.id} />
-                                    <button type="submit" className="text-[9px] uppercase tracking-widest font-bold text-[#8a93a6] hover:text-white transition-colors">
-                                      Undo
-                                    </button>
+                                    <button type="submit" className="text-[9px] uppercase tracking-widest font-bold text-[#8a93a6] hover:text-white transition-colors">Undo</button>
                                   </form>
                                 </>
                               )}
@@ -1642,13 +1538,7 @@ export default async function Home(props: any = {}) {
                             !isReadOnly && (
                               <form action={sendToSavings}>
                                 <input type="hidden" name="id" value={budget.id} />
-                                <button 
-                                  type="submit" 
-                                  disabled={remaining <= 0}
-                                  className="text-[10px] uppercase tracking-widest font-bold px-4 py-2 sm:px-5 sm:py-2.5 rounded-full border border-teal-500/40 text-teal-400 bg-teal-500/10 hover:bg-teal-500/20 transition-all disabled:opacity-30 disabled:hover:bg-teal-500/10"
-                                >
-                                  Approve & Send to Pool
-                                </button>
+                                <button type="submit" disabled={remaining <= 0} className="text-[10px] uppercase tracking-widest font-bold px-4 py-2 sm:px-5 sm:py-2.5 rounded-full border border-teal-500/40 text-teal-400 bg-teal-500/10 hover:bg-teal-500/20 transition-all disabled:opacity-30 disabled:hover:bg-teal-500/10">Approve & Send to Pool</button>
                               </form>
                             )
                           )}
