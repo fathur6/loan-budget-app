@@ -36,7 +36,18 @@ async function updateDebtBalances(formData: FormData) {
   const creditor = formData.get('creditor') as string
   const arrears = Number(formData.get('arrears') ?? 0)
   const float = Number(formData.get('float') ?? 0)
-  await supabase.from('debts').update({ creditor, arrears_balance: arrears, float_balance: float }).eq('id', id)
+  const monthly_due = Number(formData.get('monthly_due') ?? 0)
+  const original_loan_amount = Number(formData.get('original_loan_amount') ?? 0)
+  const total_debt_amount = Number(formData.get('total_debt_amount') ?? 0)
+
+  await supabase.from('debts').update({ 
+    creditor, 
+    arrears_balance: arrears, 
+    float_balance: float,
+    monthly_due,
+    original_loan_amount,
+    total_debt_amount 
+  }).eq('id', id)
   revalidatePath('/')
 }
 
@@ -980,6 +991,18 @@ export default async function Home(props: any = {}) {
                       <input type="hidden" name="id" value={debt.id} />
                       <input type="text" name="creditor" defaultValue={debt.creditor} className="w-full bg-transparent font-bold text-white text-sm outline-none border-b border-transparent focus:border-amber-500/50 pb-1 transition-colors" placeholder="Liability Name" />
                       <div className="grid grid-cols-2 gap-3 sm:gap-4">
+                        <div className="col-span-2">
+                          <label className="text-[9px] text-[#8a93a6] block mb-1.5 uppercase tracking-widest font-bold">Outstanding Principal (RM)</label>
+                          <input name="total_debt_amount" type="number" step="0.01" defaultValue={n(debt.total_debt_amount).toFixed(2)} className="w-full bg-[#161a23] border border-[#272b38] rounded-lg px-2.5 py-2 text-white text-xs outline-none focus:border-amber-500/50 transition-colors" />
+                        </div>
+                        <div>
+                          <label className="text-[9px] text-[#8a93a6] block mb-1.5 uppercase tracking-widest font-bold">Monthly Due (RM)</label>
+                          <input name="monthly_due" type="number" step="0.01" defaultValue={n(debt.monthly_due).toFixed(2)} className="w-full bg-[#161a23] border border-[#272b38] rounded-lg px-2.5 py-2 text-white text-xs outline-none focus:border-amber-500/50 transition-colors" />
+                        </div>
+                        <div>
+                          <label className="text-[9px] text-[#8a93a6] block mb-1.5 uppercase tracking-widest font-bold">Facility Limit (RM)</label>
+                          <input name="original_loan_amount" type="number" step="0.01" defaultValue={n(debt.original_loan_amount).toFixed(2)} className="w-full bg-[#161a23] border border-[#272b38] rounded-lg px-2.5 py-2 text-white text-xs outline-none focus:border-amber-500/50 transition-colors" />
+                        </div>
                         <div>
                           <label className="text-[9px] text-[#8a93a6] block mb-1.5 uppercase tracking-widest font-bold">Arrears (RM)</label>
                           <input name="arrears" type="number" step="0.01" defaultValue={n(debt.arrears_balance).toFixed(2)} className="w-full bg-[#161a23] border border-[#272b38] rounded-lg px-2.5 py-2 text-white text-xs outline-none focus:border-amber-500/50 transition-colors" />
@@ -1171,8 +1194,29 @@ export default async function Home(props: any = {}) {
                   const actualAmountPaid = paymentRecord?.amount_paid ? Number(paymentRecord.amount_paid) : statementTotalDue;
                   const isExpanded = expandedDebtId == String(debt.id)
                   
-                  // CORRECTED ARREARS AGEING LOGIC MATCHING BANK CYCLES EXACTLY
-                  const arrearsCount = n(debt.monthly_due) > 0 ? Math.floor(n(debt.arrears_balance) / n(debt.monthly_due)) : 0;
+                  // DYNAMIC ARREARS AGEING LOGIC (INCLUDING PARTIAL PAYMENTS)
+                  let currentArrears = n(debt.arrears_balance);
+                  if (debtIsPaidThisMonth) {
+                    // Formula dinamik: Tunggakan sedia ada + (Ansuran Bulanan - Amaun yang dibayar)
+                    currentArrears = Math.max(0, currentArrears + n(debt.monthly_due) - actualAmountPaid);
+                  }
+                  
+                  const arrearsCount = n(debt.monthly_due) > 0 ? Math.floor(currentArrears / n(debt.monthly_due)) : 0;
+
+                  let statusText = 'Outstanding';
+                  let statusColor = 'text-amber-400';
+                  if (debtIsPaidThisMonth) {
+                      if (actualAmountPaid < n(debt.monthly_due)) {
+                          statusText = 'Partial Payment (Arrears Increased)';
+                          statusColor = 'text-rose-400';
+                      } else if (currentArrears > 0) {
+                          statusText = 'Paid Base (Arrears Active)';
+                          statusColor = 'text-rose-400';
+                      } else {
+                          statusText = 'Settled (Cycle)';
+                          statusColor = 'text-teal-400';
+                      }
+                  }
                   
                   return (
                     <div key={debt.id} className={`rounded-xl border transition-all duration-300 overflow-hidden ${debtIsPaidThisMonth ? 'border-[#272b38] bg-[#0b0e14] opacity-60' : 'border-[#272b38] bg-[#161a23]'} ${isExpanded ? 'border-teal-500/50 shadow-[0_0_15px_rgba(20,184,166,0.1)]' : ''}`}>
@@ -1180,19 +1224,17 @@ export default async function Home(props: any = {}) {
                         <div className="space-y-1 sm:space-y-2">
                           <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
                             <span className="font-bold text-base sm:text-lg tracking-tight text-white leading-tight">{debt.creditor}</span>
-                            {arrearsCount > 0 && !debtIsPaidThisMonth && (
+                            {arrearsCount > 0 && (
                               <span className="text-[8px] sm:text-[9px] bg-rose-500/10 text-rose-400 border border-rose-500/30 px-1.5 py-0.5 rounded-md font-bold uppercase tracking-widest">
                                 Arrears (x{arrearsCount})
                               </span>
                             )}
                           </div>
-                          {!debtIsPaidThisMonth && (
-                            <div className="text-[10px] sm:text-[11px] text-[#8a93a6] font-medium space-y-0.5 sm:space-y-1">
-                              <p>Base: RM {n(debt.monthly_due).toFixed(2)}</p>
-                              {n(debt.arrears_balance) > 0 && <p className="text-rose-400">Arrears: +RM {n(debt.arrears_balance).toFixed(2)}</p>}
-                              {n(debt.float_balance) > 0 && <p className="text-teal-400">Credit: -RM {n(debt.float_balance).toFixed(2)}</p>}
-                            </div>
-                          )}
+                          <div className="text-[10px] sm:text-[11px] text-[#8a93a6] font-medium space-y-0.5 sm:space-y-1">
+                            <p>Base: RM {n(debt.monthly_due).toFixed(2)}</p>
+                            {currentArrears > 0 && <p className="text-rose-400">Arrears: +RM {currentArrears.toFixed(2)}</p>}
+                            {n(debt.float_balance) > 0 && <p className="text-teal-400">Credit: -RM {n(debt.float_balance).toFixed(2)}</p>}
+                          </div>
                           <a href={`?month=${currentSelectedMonth}${isExpanded ? '' : `&details=${debt.id}`}${isEditing ? '&edit=true' : ''}`} className="text-[9px] sm:text-[10px] text-teal-400 hover:text-teal-300 mt-2 inline-block transition-colors uppercase tracking-widest font-bold">{isExpanded ? 'Hide ▲' : 'Details ▼'}</a>
                         </div>
 
@@ -1262,7 +1304,7 @@ export default async function Home(props: any = {}) {
                             </div>
                             <div className="text-right">
                               <p className="text-[9px] text-[#8a93a6] font-bold uppercase tracking-widest">Status</p>
-                              <p className={`text-xs font-bold mt-1 ${debtIsPaidThisMonth ? 'text-teal-400' : 'text-amber-400'}`}>{debtIsPaidThisMonth ? 'Settled (Cycle)' : 'Outstanding'}</p>
+                              <p className={`text-xs font-bold mt-1 ${statusColor}`}>{statusText}</p>
                             </div>
                           </div>
 
@@ -1324,22 +1366,34 @@ export default async function Home(props: any = {}) {
                                       if (isTracked) {
                                         if (isFuture) {
                                           bgClass = 'bg-[#0b0e14]';
-                                        } else if (isMonthPaid) {
+                                        } else if (isMonthPaid && !isMonthCurrent) {
                                           content = '✓';
                                           bgClass = 'bg-teal-500/10';
                                           textClass = 'text-teal-400';
                                           borderClass = 'border-teal-500/40';
                                         } else if (isMonthCurrent) {
-                                          content = arrearsCount > 0 ? String(arrearsCount) : '0';
-                                          bgClass = 'bg-[#161a23]';
-                                          borderClass = 'border-[#383e52] border-dashed';
-                                          if (arrearsCount > 0) {
-                                            textClass = 'text-rose-400';
-                                            bgClass = 'bg-rose-500/5';
-                                            borderClass = 'border-rose-500/30';
+                                          if (isMonthPaid && actualAmountPaid >= n(debt.monthly_due) && arrearsCount === 0) {
+                                              content = '✓';
+                                              bgClass = 'bg-teal-500/10';
+                                              textClass = 'text-teal-400';
+                                              borderClass = 'border-teal-500/40';
+                                          } else if (isMonthPaid && actualAmountPaid < n(debt.monthly_due)) {
+                                              content = 'P'; // Indicates Partial Payment Fallback
+                                              textClass = 'text-rose-400';
+                                              bgClass = 'bg-rose-500/10';
+                                              borderClass = 'border-rose-500/40';
+                                          } else if (arrearsCount > 0) {
+                                              content = String(arrearsCount);
+                                              textClass = 'text-rose-400';
+                                              bgClass = 'bg-rose-500/5';
+                                              borderClass = 'border-rose-500/30';
+                                          } else {
+                                              content = '0';
+                                              bgClass = 'bg-[#161a23]';
+                                              borderClass = 'border-[#383e52] border-dashed';
                                           }
                                         } else {
-                                          // Displays the verified credit index
+                                          // Displays the verified credit index for unpaid past months
                                           content = arrearsCount > 0 ? String(arrearsCount) : '1';
                                           bgClass = 'bg-rose-500/10';
                                           textClass = 'text-rose-400';
@@ -1371,9 +1425,9 @@ export default async function Home(props: any = {}) {
                               </div>
 
                               <div className="flex justify-center gap-3 sm:gap-6 mt-4 text-[9px] text-[#8a93a6] font-bold uppercase tracking-widest flex-wrap">
-                                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-teal-500/10 border border-teal-500/40"></span> Paid</span>
+                                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-teal-500/10 border border-teal-500/40"></span> Paid (Full)</span>
                                 <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-[#161a23] border border-[#383e52] border-dashed"></span> Pending</span>
-                                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-rose-500/10 border border-rose-500/40"></span> Arrears</span>
+                                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-rose-500/10 border border-rose-500/40"></span> Arrears / Partial</span>
                                 <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-[#0b0e14]"></span> Untracked</span>
                               </div>
                             </div>
