@@ -952,7 +952,7 @@ export default async function Home(props: any = {}) {
               <div className="relative z-10">
                 <div className="flex justify-between items-start mb-2">
                   <p className="text-[10px] sm:text-[11px] text-[#8a93a6] font-semibold uppercase tracking-[0.15em]">Liquidity Pool</p>
-                  <span className="border border-teal-500/30 text-teal-400 bg-teal-500/10 px-2.5 py-0.5 sm:py-1 rounded text-[8px] sm:text-[9px] font-bold uppercase tracking-widest flex items-center gap-1">
+                  <span className="border border-teal-500/30 text-teal-400 bg-teal-500/10 px-2 py-0.5 sm:py-1 rounded text-[8px] sm:text-[9px] font-bold uppercase tracking-widest flex items-center gap-1">
                     <span className="w-1 h-1 rounded-full bg-teal-400 animate-pulse"></span> LOCKED
                   </span>
                 </div>
@@ -1194,11 +1194,15 @@ export default async function Home(props: any = {}) {
                   const actualAmountPaid = paymentRecord?.amount_paid ? Number(paymentRecord.amount_paid) : statementTotalDue;
                   const isExpanded = expandedDebtId == String(debt.id)
                   
-                  // DYNAMIC ARREARS AGEING LOGIC (INCLUDING PARTIAL PAYMENTS)
+                  // DYNAMIC ARREARS & PRINCIPAL AGEING LOGIC
                   let currentArrears = n(debt.arrears_balance);
+                  let currentPrincipal = n(debt.total_debt_amount);
+                  
                   if (debtIsPaidThisMonth) {
                     // Formula dinamik: Tunggakan sedia ada + (Ansuran Bulanan - Amaun yang dibayar)
                     currentArrears = Math.max(0, currentArrears + n(debt.monthly_due) - actualAmountPaid);
+                    // Tolak principal secara visual (anggaran awal sebelum disegerak dengan bank)
+                    currentPrincipal = Math.max(0, currentPrincipal - actualAmountPaid);
                   }
                   
                   const arrearsCount = n(debt.monthly_due) > 0 ? Math.floor(currentArrears / n(debt.monthly_due)) : 0;
@@ -1320,7 +1324,7 @@ export default async function Home(props: any = {}) {
                             <div className="flex justify-between items-end">
                               <div>
                                 <p className="text-[9px] font-bold text-rose-400 uppercase tracking-widest">Outstanding Principal</p>
-                                <p className="text-xl sm:text-2xl font-bold text-white mt-1">RM {n(debt.total_debt_amount).toLocaleString('en-MY', { minimumFractionDigits: 2 })}</p>
+                                <p className="text-xl sm:text-2xl font-bold text-white mt-1">RM {currentPrincipal.toLocaleString('en-MY', { minimumFractionDigits: 2 })}</p>
                               </div>
                               <div className="text-right">
                                 <p className="text-[9px] font-bold text-[#8a93a6] uppercase tracking-widest">Facility Limit</p>
@@ -1328,7 +1332,7 @@ export default async function Home(props: any = {}) {
                               </div>
                             </div>
                             <div className="w-full h-1.5 bg-[#272b38] rounded-full mt-4 sm:mt-5">
-                              <div className="h-full bg-teal-400 rounded-full transition-all duration-1000 ease-out shadow-[0_0_10px_rgba(45,212,191,0.4)]" style={{ width: `${n(debt.original_loan_amount) > 0 ? (Math.max(0, n(debt.original_loan_amount) - n(debt.total_debt_amount)) / n(debt.original_loan_amount)) * 100 : 0}%` }} />
+                              <div className="h-full bg-teal-400 rounded-full transition-all duration-1000 ease-out shadow-[0_0_10px_rgba(45,212,191,0.4)]" style={{ width: `${n(debt.original_loan_amount) > 0 ? (Math.max(0, n(debt.original_loan_amount) - currentPrincipal) / n(debt.original_loan_amount)) * 100 : 0}%` }} />
                             </div>
                           </div>
 
