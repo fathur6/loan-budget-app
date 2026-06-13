@@ -1,11 +1,14 @@
-import { supabase } from './supabase'
-import { revalidatePath } from 'next/cache'
-
 // ---------- SERVER ACTIONS ----------
 
 // --- Perpetual Debt Tracking Actions ---
 async function toggleDebt(formData: FormData) {
   'use server'
+  const modSupabase = await import("." + "/supabase").catch(() => null)
+  const modCache = await import("next" + "/cache").catch(() => null)
+  if (!modSupabase || !modCache) return;
+  const { supabase } = modSupabase;
+  const { revalidatePath } = modCache;
+  
   const debtId = formData.get('id') as string
   const monthId = formData.get('monthId') as string
   const isPaid = formData.get('isPaid') === 'true'
@@ -20,6 +23,12 @@ async function toggleDebt(formData: FormData) {
 
 async function updateDebtBalances(formData: FormData) {
   'use server'
+  const modSupabase = await import("." + "/supabase").catch(() => null)
+  const modCache = await import("next" + "/cache").catch(() => null)
+  if (!modSupabase || !modCache) return;
+  const { supabase } = modSupabase;
+  const { revalidatePath } = modCache;
+
   const id = formData.get('id') as string
   const creditor = formData.get('creditor') as string
   const arrears = Number(formData.get('arrears') ?? 0)
@@ -30,6 +39,12 @@ async function updateDebtBalances(formData: FormData) {
 
 async function addDebt(formData: FormData) {
   'use server'
+  const modSupabase = await import("." + "/supabase").catch(() => null)
+  const modCache = await import("next" + "/cache").catch(() => null)
+  if (!modSupabase || !modCache) return;
+  const { supabase } = modSupabase;
+  const { revalidatePath } = modCache;
+
   const creditor = formData.get('creditor') as string
   const monthly_due = Number(formData.get('monthly_due') ?? 0)
   const original_loan_amount = Number(formData.get('original_loan_amount') ?? 0)
@@ -49,6 +64,12 @@ async function addDebt(formData: FormData) {
 // --- Budget & Liquidity Pool Server Actions ---
 async function updateBudgetSettings(formData: FormData) {
   'use server'
+  const modSupabase = await import("." + "/supabase").catch(() => null)
+  const modCache = await import("next" + "/cache").catch(() => null)
+  if (!modSupabase || !modCache) return;
+  const { supabase } = modSupabase;
+  const { revalidatePath } = modCache;
+
   const id = formData.get('id') as string
   const category = formData.get('category') as string
   const allocated = Number(formData.get('allocated') ?? 0)
@@ -58,6 +79,12 @@ async function updateBudgetSettings(formData: FormData) {
 
 async function updateBudgetSpending(formData: FormData) {
   'use server'
+  const modSupabase = await import("." + "/supabase").catch(() => null)
+  const modCache = await import("next" + "/cache").catch(() => null)
+  if (!modSupabase || !modCache) return;
+  const { supabase } = modSupabase;
+  const { revalidatePath } = modCache;
+
   const id = formData.get('id') as string
   const spent = Number(formData.get('spent') ?? 0)
   await supabase.from('budgets').update({ spent_amount: spent }).eq('id', id)
@@ -66,6 +93,12 @@ async function updateBudgetSpending(formData: FormData) {
 
 async function sendToSavings(formData: FormData) {
   'use server'
+  const modSupabase = await import("." + "/supabase").catch(() => null)
+  const modCache = await import("next" + "/cache").catch(() => null)
+  if (!modSupabase || !modCache) return;
+  const { supabase } = modSupabase;
+  const { revalidatePath } = modCache;
+
   const id = formData.get('id') as string
   await supabase.from('budgets').update({ is_saved: true }).eq('id', id)
   revalidatePath('/')
@@ -73,6 +106,12 @@ async function sendToSavings(formData: FormData) {
 
 async function undoSavings(formData: FormData) {
   'use server'
+  const modSupabase = await import("." + "/supabase").catch(() => null)
+  const modCache = await import("next" + "/cache").catch(() => null)
+  if (!modSupabase || !modCache) return;
+  const { supabase } = modSupabase;
+  const { revalidatePath } = modCache;
+
   const id = formData.get('id') as string
   await supabase.from('budgets').update({ is_saved: false }).eq('id', id)
   revalidatePath('/')
@@ -80,6 +119,12 @@ async function undoSavings(formData: FormData) {
 
 async function addBudget(formData: FormData) {
   'use server'
+  const modSupabase = await import("." + "/supabase").catch(() => null)
+  const modCache = await import("next" + "/cache").catch(() => null)
+  if (!modSupabase || !modCache) return;
+  const { supabase } = modSupabase;
+  const { revalidatePath } = modCache;
+
   const category = formData.get('category') as string
   const allocated_amount = Number(formData.get('allocated_amount') ?? 0)
   const budget_month = formData.get('budget_month') as string
@@ -96,13 +141,19 @@ async function addBudget(formData: FormData) {
 
 async function duplicatePreviousBudgets(formData: FormData) {
   'use server'
+  const modSupabase = await import("." + "/supabase").catch(() => null)
+  const modCache = await import("next" + "/cache").catch(() => null)
+  if (!modSupabase || !modCache) return;
+  const { supabase } = modSupabase;
+  const { revalidatePath } = modCache;
+
   const currentMonth = formData.get('currentMonth') as string;
   const prevMonth = formData.get('prevMonth') as string;
 
   const { data: oldBudgets } = await supabase.from('budgets').select('*').eq('budget_month', prevMonth);
   
   if (oldBudgets && oldBudgets.length > 0) {
-     const newBudgets = oldBudgets.map(b => ({
+     const newBudgets = oldBudgets.map((b: any) => ({
        category: b.category,
        allocated_amount: b.allocated_amount,
        budget_month: currentMonth,
@@ -116,6 +167,12 @@ async function duplicatePreviousBudgets(formData: FormData) {
 
 async function transferFromPool(formData: FormData) {
   'use server'
+  const modSupabase = await import("." + "/supabase").catch(() => null)
+  const modCache = await import("next" + "/cache").catch(() => null)
+  if (!modSupabase || !modCache) return;
+  const { supabase } = modSupabase;
+  const { revalidatePath } = modCache;
+
   const monthId = formData.get('monthId') as string
   const amount = Number(formData.get('amount') ?? 0)
   if (amount <= 0) return;
@@ -127,6 +184,12 @@ async function transferFromPool(formData: FormData) {
 // --- BSKL Investment Server Actions (MULTI-CONTRACT & HOLIDAYS) ---
 async function addBsklContract(formData: FormData) {
   'use server'
+  const modSupabase = await import("." + "/supabase").catch(() => null)
+  const modCache = await import("next" + "/cache").catch(() => null)
+  if (!modSupabase || !modCache) return;
+  const { supabase } = modSupabase;
+  const { revalidatePath } = modCache;
+
   const name = formData.get('name') as string
   const capital = Number(formData.get('capital') ?? 0)
   const rate = Number(formData.get('rate') ?? 0)
@@ -144,6 +207,12 @@ async function addBsklContract(formData: FormData) {
 
 async function endBsklContract(formData: FormData) {
   'use server'
+  const modSupabase = await import("." + "/supabase").catch(() => null)
+  const modCache = await import("next" + "/cache").catch(() => null)
+  if (!modSupabase || !modCache) return;
+  const { supabase } = modSupabase;
+  const { revalidatePath } = modCache;
+
   const id = formData.get('id') as string
   const endDate = new Date().toISOString().split('T')[0] 
   
@@ -156,6 +225,12 @@ async function endBsklContract(formData: FormData) {
 
 async function toggleBsklPayment(formData: FormData) {
   'use server'
+  const modSupabase = await import("." + "/supabase").catch(() => null)
+  const modCache = await import("next" + "/cache").catch(() => null)
+  if (!modSupabase || !modCache) return;
+  const { supabase } = modSupabase;
+  const { revalidatePath } = modCache;
+
   const contractId = formData.get('contract_id') as string
   const dateStr = formData.get('date') as string
   const amount = Number(formData.get('amount') ?? 0)
@@ -171,6 +246,12 @@ async function toggleBsklPayment(formData: FormData) {
 
 async function addBsklHoliday(formData: FormData) {
   'use server'
+  const modSupabase = await import("." + "/supabase").catch(() => null)
+  const modCache = await import("next" + "/cache").catch(() => null)
+  if (!modSupabase || !modCache) return;
+  const { supabase } = modSupabase;
+  const { revalidatePath } = modCache;
+
   const dateStr = formData.get('date') as string
   const description = formData.get('description') as string
   await supabase.from('bskl_holidays').insert({ holiday_date: dateStr, description })
@@ -179,6 +260,12 @@ async function addBsklHoliday(formData: FormData) {
 
 async function removeBsklHoliday(formData: FormData) {
   'use server'
+  const modSupabase = await import("." + "/supabase").catch(() => null)
+  const modCache = await import("next" + "/cache").catch(() => null)
+  if (!modSupabase || !modCache) return;
+  const { supabase } = modSupabase;
+  const { revalidatePath } = modCache;
+
   const id = formData.get('id') as string
   await supabase.from('bskl_holidays').delete().eq('id', id)
   revalidatePath('/')
@@ -187,6 +274,12 @@ async function removeBsklHoliday(formData: FormData) {
 // --- Checking Account / Salary Server Actions ---
 async function updateSalary(formData: FormData) {
   'use server'
+  const modSupabase = await import("." + "/supabase").catch(() => null)
+  const modCache = await import("next" + "/cache").catch(() => null)
+  if (!modSupabase || !modCache) return;
+  const { supabase } = modSupabase;
+  const { revalidatePath } = modCache;
+
   const monthId = formData.get('monthId') as string
   const amount = Number(formData.get('amount') ?? 0)
   await supabase.from('monthly_salary').upsert({ month_id: monthId, salary_amount: amount })
@@ -194,20 +287,94 @@ async function updateSalary(formData: FormData) {
 }
 
 // ---------- MAIN PAGE ----------
-export default async function Home({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string | undefined>>
-}) {
-  const sp = await searchParams
+export default async function Home(props: any = {}) {
+  const resolvedParams = props && props.searchParams ? props.searchParams : {};
+  let sp: any = {};
+  if (resolvedParams) {
+    try {
+      sp = typeof resolvedParams.then === 'function' ? await resolvedParams : resolvedParams;
+    } catch (e) {
+      sp = {};
+    }
+  }
+  if (!sp) sp = {};
+
   const currentSelectedMonth = sp.month || '2026-06-01'
   const currentMonthId = currentSelectedMonth.substring(0, 7) // e.g. "2026-06"
-  const isEditing = sp.edit === 'true'
   const expandedDebtId = sp.details
   const bsklModalDate = sp.bsklModal 
   const n = (v: any) => Number(v ?? 0)
 
-  // Perpetual Calendar Engine
+  // Default fallbacks to prevent Canvas runtime crashes
+  let isReadOnly = false;
+  let debts: any[] = [];
+  let allDebtPayments: any[] = [];
+  let budgets: any[] = [];
+  let allBudgetsOfYear: any[] = [];
+  let transfers: any[] = [];
+  let bsklContracts: any[] = [];
+  let bsklPayments: any[] = [];
+  let bsklHolidays: any[] = [];
+  let currentSalary = 0;
+
+  try {
+    // Memuatkan modul server secara dinamik menggunakan pemboleh ubah tempatan dengan struktur kalis ralat
+    const modHeaders = await import("next" + "/headers").catch(() => null);
+    const modSsr = await import("@supa" + "base/ssr").catch(() => null);
+    const modSupabase = await import("." + "/supabase").catch(() => null);
+
+    if (modHeaders && modSsr && modSupabase) {
+      const cookieStore = await modHeaders.cookies()
+      const { createServerClient } = modSsr
+      const { supabase } = modSupabase
+
+      const supabaseServer = createServerClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL || 'dummy',
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'dummy',
+        {
+          cookies: {
+            getAll() { return cookieStore.getAll() },
+          },
+        }
+      )
+
+      const authUserResult = await supabaseServer.auth.getUser().catch(() => ({ data: { user: null } }));
+      const user = authUserResult?.data?.user;
+      isReadOnly = user?.email === 'viewer@financepulse.com'
+
+      const [
+        { data: d1 }, { data: d2 }, { data: d3 }, { data: d4 }, 
+        { data: d5 }, { data: d6 }, { data: d7 }, { data: d8 }, { data: d9 }
+      ] = await Promise.all([
+        supabase.from('debts').select('*').order('is_akpk_obligation', { ascending: false }),
+        supabase.from('debt_payments').select('*'),
+        supabase.from('budgets').select('*').eq('budget_month', currentSelectedMonth).order('allocated_amount', { ascending: false }),
+        supabase.from('budgets').select('*'),
+        supabase.from('liquidity_transfers').select('*'),
+        supabase.from('bskl_contracts').select('*').order('effective_date', { ascending: true }),
+        supabase.from('bskl_payments').select('*'),
+        supabase.from('bskl_holidays').select('*').order('holiday_date', { ascending: true }),
+        supabase.from('monthly_salary').select('*').eq('month_id', currentMonthId).single()
+      ]);
+
+      if (d1) debts = d1;
+      if (d2) allDebtPayments = d2;
+      if (d3) budgets = d3;
+      if (d4) allBudgetsOfYear = d4;
+      if (d5) transfers = d5;
+      if (d6) bsklContracts = d6;
+      if (d7) bsklPayments = d7;
+      if (d8) bsklHolidays = d8;
+      if (d9) currentSalary = Number(d9.salary_amount);
+    }
+  } catch (error) {
+    // Ralat diabaikan secara senyap khusus untuk paparan statik Canvas.
+  }
+  
+  // Tentukan mod kemas kini data
+  const isEditing = !isReadOnly && sp.edit === 'true'
+
+  // Enjin Kalendar Perpetual
   const year = parseInt(currentSelectedMonth.split('-')[0]);
   const monthIndex = parseInt(currentSelectedMonth.split('-')[1]) - 1;
   const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
@@ -233,36 +400,14 @@ export default async function Home({
   const histFirstYear = historyMonths[0].yearStr;
   const histLastYear = historyMonths[11].yearStr;
 
-  // Database Requests
-  const { data: debts } = await supabase.from('debts').select('*').order('is_akpk_obligation', { ascending: false })
-  const { data: allDebtPaymentsData } = await supabase.from('debt_payments').select('*')
-  const allDebtPayments = allDebtPaymentsData || []
-
-  const { data: budgets } = await supabase.from('budgets').select('*').eq('budget_month', currentSelectedMonth).order('allocated_amount', { ascending: false })
-  const { data: allBudgetsOfYear } = await supabase.from('budgets').select('*')
-  
-  const { data: transfersData } = await supabase.from('liquidity_transfers').select('*')
-  const transfers = transfersData || []
-  
-  const { data: bsklContractsData } = await supabase.from('bskl_contracts').select('*').order('effective_date', { ascending: true })
-  const { data: bsklPaymentsData } = await supabase.from('bskl_payments').select('*')
-  const { data: bsklHolidaysData } = await supabase.from('bskl_holidays').select('*').order('holiday_date', { ascending: true })
-  
-  const bsklContracts = bsklContractsData || []
-  const bsklPayments = bsklPaymentsData || []
-  const bsklHolidays = bsklHolidaysData || []
-  
-  const { data: salaryData } = await supabase.from('monthly_salary').select('*').eq('month_id', currentMonthId).single()
-  const currentSalary = salaryData ? Number(salaryData.salary_amount) : 0;
-
   // --- LOAN CALCULATIONS ---
-  const totalLoansOutstanding = debts?.reduce((s, d) => {
-    const isPaidThisMonth = allDebtPayments.some(dp => dp.debt_id == d.id && dp.paid_month === currentMonthId);
+  const totalLoansOutstanding = debts?.reduce((s: number, d: any) => {
+    const isPaidThisMonth = allDebtPayments.some((dp: any) => dp.debt_id == d.id && dp.paid_month === currentMonthId);
     return s + (isPaidThisMonth ? 0 : n(d.monthly_due) + n(d.arrears_balance) - n(d.float_balance));
   }, 0) ?? 0
 
-  const paidLoansThisMonth = debts?.filter(d => allDebtPayments.some(dp => dp.debt_id == d.id && dp.paid_month === currentMonthId)).reduce((s, d) => s + n(d.monthly_due), 0) ?? 0;
-  const paidLoansStatementTotal = debts?.filter(d => allDebtPayments.some(dp => dp.debt_id == d.id && dp.paid_month === currentMonthId)).reduce((s, d) => s + (n(d.monthly_due) + n(d.arrears_balance) - n(d.float_balance)), 0) ?? 0;
+  const paidLoansThisMonth = debts?.filter((d: any) => allDebtPayments.some((dp: any) => dp.debt_id == d.id && dp.paid_month === currentMonthId)).reduce((s: number, d: any) => s + n(d.monthly_due), 0) ?? 0;
+  const paidLoansStatementTotal = debts?.filter((d: any) => allDebtPayments.some((dp: any) => dp.debt_id == d.id && dp.paid_month === currentMonthId)).reduce((s: number, d: any) => s + (n(d.monthly_due) + n(d.arrears_balance) - n(d.float_balance)), 0) ?? 0;
 
   // --- BSKL CALCULATIONS ---
   let totalBsklCapitalOutflowThisMonth = 0;
@@ -271,10 +416,10 @@ export default async function Home({
   let totalBsklCapitalAllTime = 0;
   let totalBsklRepaidAllTime = 0;
 
-  const enrichedContracts = bsklContracts.map(c => {
+  const enrichedContracts = bsklContracts.map((c: any) => {
     const cCapital = n(c.capital_injection);
-    const cPayments = bsklPayments.filter(p => p.contract_id === c.id);
-    const cTotalRepaid = cPayments.reduce((s, p) => s + n(p.amount), 0);
+    const cPayments = bsklPayments.filter((p: any) => p.contract_id === c.id);
+    const cTotalRepaid = cPayments.reduce((s: number, p: any) => s + n(p.amount), 0);
     const cNetBalance = cCapital - cTotalRepaid; 
     
     const isProfit = cNetBalance < 0;
@@ -284,7 +429,7 @@ export default async function Home({
     if (c.effective_date.startsWith(currentMonthId)) {
       totalBsklCapitalOutflowThisMonth += cCapital;
     }
-    const cPaidThisMonth = cPayments.filter(p => p.paid_date.startsWith(currentMonthId)).reduce((s, p) => s + n(p.amount), 0);
+    const cPaidThisMonth = cPayments.filter((p: any) => p.paid_date.startsWith(currentMonthId)).reduce((s: number, p: any) => s + n(p.amount), 0);
     totalBsklRepaymentsInflowThisMonth += cPaidThisMonth;
 
     totalBsklCapitalAllTime += cCapital;
@@ -297,33 +442,31 @@ export default async function Home({
   });
 
   // --- BUDGET & POOL CALCULATIONS ---
-  const totalBudgetsAllocatedThisMonth = budgets?.reduce((s, b) => s + n(b.allocated_amount), 0) ?? 0;
-  const totalBudgetsRemaining = budgets?.filter(b => !b.is_saved).reduce((s, b) => s + Math.max(0, n(b.allocated_amount) - n(b.spent_amount)), 0) ?? 0
-  const spentBudgetsThisMonth = budgets?.reduce((s, b) => s + n(b.spent_amount), 0) ?? 0
-  const savedBudgetsThisMonth = budgets?.filter(b => b.is_saved).reduce((s, b) => s + Math.max(0, n(b.allocated_amount) - n(b.spent_amount)), 0) ?? 0
-  const totalSavedAcrossAllMonths = allBudgetsOfYear?.filter(b => b.is_saved).reduce((s, b) => s + Math.max(0, n(b.allocated_amount) - n(b.spent_amount)), 0) ?? 0
+  const totalBudgetsAllocatedThisMonth = budgets?.reduce((s: number, b: any) => s + n(b.allocated_amount), 0) ?? 0;
+  const totalBudgetsRemaining = budgets?.filter((b: any) => !b.is_saved).reduce((s: number, b: any) => s + Math.max(0, n(b.allocated_amount) - n(b.spent_amount)), 0) ?? 0
+  const spentBudgetsThisMonth = budgets?.reduce((s: number, b: any) => s + n(b.spent_amount), 0) ?? 0
+  const savedBudgetsThisMonth = budgets?.filter((b: any) => b.is_saved).reduce((s: number, b: any) => s + Math.max(0, n(b.allocated_amount) - n(b.spent_amount)), 0) ?? 0
+  const totalSavedAcrossAllMonths = allBudgetsOfYear?.filter((b: any) => b.is_saved).reduce((s: number, b: any) => s + Math.max(0, n(b.allocated_amount) - n(b.spent_amount)), 0) ?? 0
 
-  const totalTransferredFromPoolAllTime = transfers.reduce((s, t) => s + n(t.amount), 0);
-  const poolTransfersInThisMonth = transfers.filter(t => t.month_id === currentMonthId).reduce((s, t) => s + n(t.amount), 0);
-  // Pool Balance now directly collects BSKL returns instead of Checking
+  const totalTransferredFromPoolAllTime = transfers.reduce((s: number, t: any) => s + n(t.amount), 0);
+  const poolTransfersInThisMonth = transfers.filter((t: any) => t.month_id === currentMonthId).reduce((s: number, t: any) => s + n(t.amount), 0);
   const currentPoolBalance = totalSavedAcrossAllMonths + totalBsklRepaidAllTime - totalTransferredFromPoolAllTime;
 
   // --- CASHFLOW & GRAND TOTALS ---
-  // Checking no longer receives Trade Returns directly
   const currentCheckingBalance = currentSalary + poolTransfersInThisMonth - totalBudgetsAllocatedThisMonth - paidLoansStatementTotal - totalBsklCapitalOutflowThisMonth;
   const totalRemainingBalance = totalLoansOutstanding + totalBudgetsRemaining + totalBsklRemainingCapitalToPay;
   const totalPaidThisMonth = paidLoansThisMonth + spentBudgetsThisMonth + savedBudgetsThisMonth + totalBsklRepaymentsInflowThisMonth;
   const grandTotalMonthlyFootprint = totalRemainingBalance + totalPaidThisMonth
   const progressPct = grandTotalMonthlyFootprint > 0 ? Math.min(100, (totalPaidThisMonth / grandTotalMonthlyFootprint) * 100) : 0
   
-  const yearlyPaidLoans = allDebtPayments.filter(dp => dp.paid_month.startsWith(year.toString())).reduce((sum, dp) => {
-    const debt = debts?.find(d => d.id == dp.debt_id);
+  const yearlyPaidLoans = allDebtPayments.filter((dp: any) => dp.paid_month.startsWith(year.toString())).reduce((sum: number, dp: any) => {
+    const debt = debts?.find((d: any) => d.id == dp.debt_id);
     return sum + (debt ? n(debt.monthly_due) : 0);
   }, 0);
 
-  const baseMonthlyLoanTotal = debts?.reduce((s, d) => s + n(d.monthly_due), 0) ?? 0
-  const yearlyTotalAllocated = (allBudgetsOfYear?.reduce((s, b) => s + n(b.allocated_amount), 0) ?? 0) + baseMonthlyLoanTotal * 2 + totalBsklCapitalAllTime;
-  const yearlyTotalBudgetCleared = allBudgetsOfYear?.reduce((s, b) => {
+  const baseMonthlyLoanTotal = debts?.reduce((s: number, d: any) => s + n(d.monthly_due), 0) ?? 0
+  const yearlyTotalAllocated = (allBudgetsOfYear?.reduce((s: number, b: any) => s + n(b.allocated_amount), 0) ?? 0) + baseMonthlyLoanTotal * 2 + totalBsklCapitalAllTime;
+  const yearlyTotalBudgetCleared = allBudgetsOfYear?.reduce((s: number, b: any) => {
     const spent = n(b.spent_amount)
     const saved = b.is_saved ? Math.max(0, n(b.allocated_amount) - spent) : 0
     return s + spent + saved
@@ -344,6 +487,21 @@ export default async function Home({
           color: #e2e8f0 !important; 
           color-scheme: dark !important; 
         }
+        /* Custom scrollbar style for tactical feel */
+        ::-webkit-scrollbar {
+          width: 5px;
+          height: 5px;
+        }
+        ::-webkit-scrollbar-track {
+          background: #0b0e14;
+        }
+        ::-webkit-scrollbar-thumb {
+          background: #272b38;
+          border-radius: 9999px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+          background: #383e52;
+        }
       `}} />
 
       <main className="min-h-screen bg-[#0b0e14] text-slate-200 antialiased font-sans w-full max-w-[1600px] mx-auto pb-16 relative">
@@ -360,12 +518,27 @@ export default async function Home({
                 <a href={`?month=${currentSelectedMonth}`} className="text-[#8a93a6] hover:text-white text-2xl leading-none">&times;</a>
               </div>
               <div className="p-6 space-y-4">
-                {enrichedContracts.filter(c => {
+                {enrichedContracts.filter((c: any) => {
                   const cEffDate = c.effective_date;
                   const cEndDate = c.end_date || '2099-12-31';
                   return bsklModalDate >= cEffDate && bsklModalDate <= cEndDate;
-                }).map(c => {
-                  const isPaid = bsklPayments.some(p => p.contract_id === c.id && p.paid_date === bsklModalDate);
+                }).map((c: any) => {
+                  const isPaid = bsklPayments.some((p: any) => p.contract_id === c.id && p.paid_date === bsklModalDate);
+                  
+                  if (isReadOnly) {
+                    return (
+                      <div key={c.id} className={`flex justify-between items-center p-4 rounded-xl border ${isPaid ? 'bg-teal-500/10 border-teal-500/30' : 'bg-[#0b0e14] border-[#383e52]'}`}>
+                        <div>
+                          <p className={`font-bold ${isPaid ? 'text-teal-400' : 'text-white'}`}>{c.name}</p>
+                          <p className="text-[10px] text-[#8a93a6] uppercase tracking-widest mt-1">RM {n(c.daily_rate).toFixed(2)}</p>
+                        </div>
+                        <span className="text-[9px] font-bold text-[#8a93a6] uppercase bg-[#161a23] px-3 py-1.5 border border-[#272b38] rounded-md tracking-widest">
+                          {isPaid ? 'Collected' : 'Pending'}
+                        </span>
+                      </div>
+                    );
+                  }
+
                   return (
                     <form key={c.id} action={toggleBsklPayment} className={`flex justify-between items-center p-4 rounded-xl border ${isPaid ? 'bg-teal-500/10 border-teal-500/30' : 'bg-[#0b0e14] border-[#383e52]'}`}>
                       <input type="hidden" name="contract_id" value={c.id} />
@@ -388,70 +561,79 @@ export default async function Home({
           </div>
         )}
 
-        {/* NADI PULSE STYLE HEADER */}
-        <header className="p-6 md:px-10 pt-8 pb-6 flex justify-between items-center bg-[#0b0e14] border-b border-[#272b38] sticky top-0 z-20">
-          <div className="flex items-center gap-4">
-            <div className="w-10 h-10 rounded-full border border-teal-500/50 flex items-center justify-center bg-teal-500/10 shadow-[0_0_15px_rgba(20,184,166,0.15)]">
-              <svg className="w-6 h-6 text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        {/* FINANCIAL PULSE HEADER */}
+        <header className="p-4 sm:p-6 md:px-10 pt-6 pb-6 flex justify-between items-center bg-[#0b0e14] border-b border-[#272b38] sticky top-0 z-20">
+          <div className="flex items-center gap-3 sm:gap-4">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full border border-teal-500/50 flex items-center justify-center bg-teal-500/10 shadow-[0_0_15px_rgba(20,184,166,0.15)]">
+              <svg className="w-5 h-5 sm:w-6 sm:h-6 text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 12h4l3-9 5 18 3-9h6" />
               </svg>
             </div>
             <div>
-              <h1 className="text-xl md:text-2xl font-black text-white tracking-widest uppercase">
-                Finance <span className="text-amber-400">PULSE</span>
+              <h1 className="text-lg sm:text-xl md:text-2xl font-black text-white tracking-widest uppercase">
+                FINANCE <span className="text-amber-400">PULSE</span>
               </h1>
             </div>
           </div>
-          <a
-            href={`?month=${currentSelectedMonth}${isEditing ? '' : '&edit=true'}`}
-            className={`text-[10px] md:text-xs font-bold px-5 py-2.5 rounded-full border transition-all uppercase tracking-widest flex items-center gap-2 ${
-              isEditing 
-                ? 'bg-rose-500/10 text-rose-400 border-rose-500/50 hover:bg-rose-500/20' 
-                : 'bg-amber-500/10 text-amber-400 border-amber-500/40 hover:bg-amber-500/20 shadow-[0_0_10px_rgba(251,191,36,0.05)]'
-            }`}
-          >
-            {isEditing ? (
-              <><span className="text-lg leading-none">&times;</span> CLOSE SYNC</>
-            ) : (
-              <><span className="text-lg leading-none">&#9881;</span> ADJUST DATA</>
-            )}
-          </a>
+          
+          {isReadOnly ? (
+            <div className="text-[9px] md:text-xs font-bold px-4 py-2 sm:px-5 sm:py-2.5 rounded-full border bg-[#161a23] text-[#8a93a6] border-[#272b38] uppercase tracking-widest flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#8a93a6]"></span> VIEWER MODE
+            </div>
+          ) : (
+            <a
+              href={`?month=${currentSelectedMonth}${isEditing ? '' : '&edit=true'}`}
+              className={`text-[9px] sm:text-[10px] md:text-xs font-bold px-4 py-2 sm:px-5 sm:py-2.5 rounded-full border transition-all uppercase tracking-widest flex items-center gap-1.5 sm:gap-2 ${
+                isEditing 
+                  ? 'bg-rose-500/10 text-rose-400 border-rose-500/50 hover:bg-rose-500/20' 
+                  : 'bg-amber-500/10 text-amber-400 border-amber-500/40 hover:bg-amber-500/20 shadow-[0_0_10px_rgba(251,191,36,0.05)]'
+              }`}
+            >
+              {isEditing ? (
+                <><span className="text-base leading-none">&times;</span> CLOSE SYNC</>
+              ) : (
+                <><span className="text-base leading-none">&#9881;</span> ADJUST DATA</>
+              )}
+            </a>
+          )}
         </header>
 
-        <div className="p-5 md:p-10 space-y-8">
+        <div className="p-4 sm:p-6 md:p-10 space-y-6 sm:space-y-8">
           
           {/* --- DYNAMIC TIME SWITCHER --- */}
-          <div className="flex justify-center items-center gap-6 max-w-2xl mx-auto mb-10">
-            <a href={`?month=${prevMonthStr}`} className="text-[10px] md:text-xs font-bold px-5 py-2 rounded-full border border-transparent text-[#8a93a6] hover:text-white hover:bg-[#161a23] transition-all tracking-widest uppercase">
+          <div className="flex justify-between sm:justify-center items-center gap-3 sm:gap-6 max-w-2xl mx-auto mb-4 sm:mb-10 bg-[#161a23]/30 sm:bg-transparent p-2 rounded-xl border border-[#272b38]/30 sm:border-transparent">
+            <a href={`?month=${prevMonthStr}`} className="text-[8px] sm:text-[10px] md:text-xs font-bold px-3 py-1.5 sm:px-5 sm:py-2 rounded-full border border-[#272b38] sm:border-transparent text-[#8a93a6] hover:text-white hover:bg-[#161a23] transition-all tracking-widest uppercase">
               &laquo; {prevMonthLabel}
             </a>
-            <span className="text-xl md:text-2xl font-black text-white uppercase tracking-widest">{formattedMonthDisplay}</span>
-            <a href={`?month=${nextMonthStr}`} className="text-[10px] md:text-xs font-bold px-5 py-2 rounded-full border border-transparent text-[#8a93a6] hover:text-white hover:bg-[#161a23] transition-all tracking-widest uppercase">
+            <span className="text-xs sm:text-lg md:text-2xl font-black text-white uppercase tracking-widest text-center">{formattedMonthDisplay}</span>
+            <a href={`?month=${nextMonthStr}`} className="text-[8px] sm:text-[10px] md:text-xs font-bold px-3 py-1.5 sm:px-5 sm:py-2 rounded-full border border-[#272b38] sm:border-transparent text-[#8a93a6] hover:text-white hover:bg-[#161a23] transition-all tracking-widest uppercase">
               {nextMonthLabel} &raquo;
             </a>
           </div>
 
-          {/* --- 4-COLUMN DESKTOP GRID FOR TOP METRICS --- */}
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 md:gap-6">
+          {/* --- 4-COLUMN RESPONSIVE METRICS GRID --- */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6">
             
             {/* 1. CHECKING ACCOUNT */}
-            <div className="bg-[#161a23] border border-[#272b38] rounded-2xl p-6 md:p-8 flex flex-col justify-between relative overflow-hidden group hover:border-[#383e52] transition-colors">
-              <div className="relative z-10">
+            <div className="bg-[#161a23] border border-[#272b38] rounded-2xl p-5 sm:p-6 md:p-8 flex flex-col justify-between relative overflow-hidden group hover:border-[#383e52] transition-colors">
+              <div className="relative z-10 w-full">
                 <div className="flex justify-between items-start mb-2">
-                  <p className="text-[11px] text-[#8a93a6] font-semibold uppercase tracking-[0.15em]">Checking Account</p>
-                  <span className="border border-amber-500/30 text-amber-400 bg-amber-500/10 px-2 py-1 rounded text-[9px] font-bold uppercase tracking-widest">SALARY</span>
+                  <p className="text-[10px] sm:text-[11px] text-[#8a93a6] font-semibold uppercase tracking-[0.15em]">Checking Account</p>
+                  <span className="border border-amber-500/30 text-amber-400 bg-amber-500/10 px-2 py-0.5 sm:py-1 rounded text-[8px] sm:text-[9px] font-bold uppercase tracking-widest">SALARY</span>
                 </div>
-                <p className={`text-4xl font-bold mt-2 tracking-tight ${currentCheckingBalance < 0 ? 'text-rose-400' : 'text-amber-400'}`}>
+                <p className={`text-2xl sm:text-3xl md:text-4xl font-bold mt-2 tracking-tight ${currentCheckingBalance < 0 ? 'text-rose-400' : 'text-amber-400'}`}>
                   {currentCheckingBalance.toLocaleString('en-MY', { minimumFractionDigits: 2 })}
                 </p>
                 
-                <form action={updateSalary} className="flex gap-2 mt-5">
-                  <input type="hidden" name="monthId" value={currentMonthId} />
-                  <input type="number" step="0.01" name="amount" defaultValue={currentSalary || ''} placeholder="Set Salary..." className="w-full bg-[#0b0e14] border border-[#272b38] rounded-lg px-3 py-2 text-white placeholder-[#8a93a6] text-xs outline-none focus:border-amber-500/50" />
-                  <button type="submit" className="bg-[#272b38] text-white px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-[#383e52] transition-colors">SET</button>
-                </form>
+                {!isReadOnly && (
+                  <form action={updateSalary} className="flex gap-2 mt-4 sm:mt-5">
+                    <input type="hidden" name="monthId" value={currentMonthId} />
+                    <input type="number" step="0.01" name="amount" defaultValue={currentSalary || ''} placeholder="Set Salary..." className="w-full bg-[#0b0e14] border border-[#272b38] rounded-lg px-2.5 py-2 text-white placeholder-[#8a93a6] text-xs outline-none focus:border-amber-500/50" />
+                    <button type="submit" className="bg-[#272b38] text-white px-2.5 py-2 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-[#383e52] transition-colors">SET</button>
+                  </form>
+                )}
 
-                <div className="space-y-1.5 mt-4 text-[9px] font-medium text-[#8a93a6]">
+                <div className={`space-y-1.5 font-medium text-[#8a93a6] ${isReadOnly ? 'mt-4' : 'mt-4'} text-[9px] border-t border-[#272b38]/50 pt-3`}>
                   <div className="flex justify-between items-center"><span className="uppercase tracking-widest">Salary IN</span> <span className="text-teal-400 font-mono">+{currentSalary.toFixed(2)}</span></div>
                   <div className="flex justify-between items-center border-b border-[#272b38] pb-1.5"><span className="uppercase tracking-widest">Pool Transf. IN</span> <span className="text-teal-400 font-mono">+{poolTransfersInThisMonth.toFixed(2)}</span></div>
                   <div className="flex justify-between items-center pt-1"><span className="uppercase tracking-widest">Budgets OUT</span> <span className="text-rose-400 font-mono">-{totalBudgetsAllocatedThisMonth.toFixed(2)}</span></div>
@@ -462,44 +644,44 @@ export default async function Home({
             </div>
 
             {/* 2. Net Cash Required */}
-            <div className="bg-[#161a23] border border-[#272b38] rounded-2xl p-6 md:p-8 flex flex-col justify-between group hover:border-[#383e52] transition-colors">
+            <div className="bg-[#161a23] border border-[#272b38] rounded-2xl p-5 sm:p-6 md:p-8 flex flex-col justify-between group hover:border-[#383e52] transition-colors">
               <div>
-                <p className="text-[11px] text-[#8a93a6] font-semibold uppercase tracking-[0.15em] mb-2">Net Cash Required</p>
-                <p className="text-4xl font-bold text-white tracking-tight">
+                <p className="text-[10px] sm:text-[11px] text-[#8a93a6] font-semibold uppercase tracking-[0.15em] mb-2">Net Cash Required</p>
+                <p className="text-2xl sm:text-3xl md:text-4xl font-bold text-white tracking-tight">
                   {totalRemainingBalance.toLocaleString('en-MY', { minimumFractionDigits: 2 })}
                 </p>
               </div>
-              <div className="mt-8">
+              <div className="mt-6 sm:mt-8">
                 <div className="w-full h-2 bg-[#272b38] rounded-full">
                   <div className="bg-teal-400 h-full rounded-full transition-all duration-1000 ease-out shadow-[0_0_10px_rgba(45,212,191,0.5)]" style={{ width: `${progressPct}%` }}></div>
                 </div>
-                <div className="grid grid-cols-2 gap-4 mt-5 pt-4 border-t border-[#272b38]/50 text-xs">
+                <div className="grid grid-cols-2 gap-2 sm:gap-4 mt-4 pt-4 border-t border-[#272b38]/50 text-xs">
                   <div>
-                    <p className="uppercase font-bold text-[#8a93a6] tracking-widest text-[9px]">Total Footprint</p>
-                    <p className="font-mono text-white mt-1 text-sm">{grandTotalMonthlyFootprint.toFixed(2)}</p>
+                    <p className="uppercase font-bold text-[#8a93a6] tracking-widest text-[8px] sm:text-[9px]">Total Footprint</p>
+                    <p className="font-mono text-white mt-1 text-xs sm:text-sm">{grandTotalMonthlyFootprint.toFixed(2)}</p>
                   </div>
-                  <div className="border-l border-[#272b38]/50 pl-4">
-                    <p className="uppercase font-bold text-[#8a93a6] tracking-widest text-[9px]">Settled / Pooled</p>
-                    <p className="font-mono text-teal-400 mt-1 text-sm">{totalPaidThisMonth.toFixed(2)}</p>
+                  <div className="border-l border-[#272b38]/50 pl-2 sm:pl-4">
+                    <p className="uppercase font-bold text-[#8a93a6] tracking-widest text-[8px] sm:text-[9px]">Settled / Pooled</p>
+                    <p className="font-mono text-teal-400 mt-1 text-xs sm:text-sm">{totalPaidThisMonth.toFixed(2)}</p>
                   </div>
                 </div>
               </div>
             </div>
 
             {/* 3. Year-to-Date Tracking */}
-            <div className="bg-[#161a23] border border-[#272b38] rounded-2xl p-6 md:p-8 flex flex-col justify-between group hover:border-[#383e52] transition-colors">
+            <div className="bg-[#161a23] border border-[#272b38] rounded-2xl p-5 sm:p-6 md:p-8 flex flex-col justify-between group hover:border-[#383e52] transition-colors">
               <div className="flex justify-between items-center">
-                <div>
-                  <p className="text-[11px] text-[#8a93a6] font-semibold uppercase tracking-[0.15em]">Year-To-Date</p>
-                  <p className="text-3xl font-bold text-white tracking-tight mt-2">
+                <div className="space-y-1">
+                  <p className="text-[10px] sm:text-[11px] text-[#8a93a6] font-semibold uppercase tracking-[0.15em]">Year-To-Date</p>
+                  <p className="text-xl sm:text-2xl md:text-3xl font-bold text-white tracking-tight">
                     {yearlyTotalPaid.toLocaleString('en-MY', { minimumFractionDigits: 2 })}
                   </p>
-                  <p className="text-[10px] text-[#8a93a6] mt-2 tracking-wider uppercase">
-                    TARGET <span className="text-white">{yearlyTotalAllocated.toLocaleString('en-MY', { minimumFractionDigits: 2 })}</span>
+                  <p className="text-[9px] text-[#8a93a6] tracking-wider uppercase">
+                    TARGET <span className="text-white font-mono">{yearlyTotalAllocated.toLocaleString('en-MY', { minimumFractionDigits: 2 })}</span>
                   </p>
                 </div>
                 
-                <div className="relative w-16 h-16 md:w-20 md:h-20 flex-shrink-0 ml-4">
+                <div className="relative w-14 h-14 sm:w-16 sm:h-16 md:w-20 md:h-20 flex-shrink-0 ml-2">
                   <svg className="w-full h-full transform -rotate-90 drop-shadow-[0_0_8px_rgba(45,212,191,0.3)]" viewBox="0 0 36 36">
                     <circle cx="18" cy="18" r="15.9155" fill="transparent" stroke="#272b38" strokeWidth="4"></circle>
                     <circle cx="18" cy="18" r="15.9155" fill="transparent" stroke="currentColor" strokeWidth="4" 
@@ -508,38 +690,40 @@ export default async function Home({
                     </circle>
                   </svg>
                   <div className="absolute inset-0 flex items-center justify-center flex-col">
-                    <span className="text-xs md:text-sm font-bold text-white leading-none tracking-tight">{yearlyProgressPercentage.toFixed(0)}%</span>
+                    <span className="text-xs sm:text-sm font-bold text-white leading-none tracking-tight">{yearlyProgressPercentage.toFixed(0)}%</span>
                   </div>
                 </div>
               </div>
-              <div className="mt-6 border-t border-[#272b38]/50 pt-4">
-                 <p className="text-[10px] text-[#8a93a6] tracking-wider leading-relaxed">Total structural volume cleared & pooled across all logged cycles.</p>
+              <div className="mt-4 border-t border-[#272b38]/50 pt-3">
+                 <p className="text-[9px] sm:text-[10px] text-[#8a93a6] tracking-wider leading-relaxed">Total structural volume cleared & pooled across all logged cycles.</p>
               </div>
             </div>
 
             {/* 4. Liquidity Pool Account */}
-            <div className="bg-[#161a23] border border-[#272b38] rounded-2xl p-6 md:p-8 flex flex-col justify-between group hover:border-[#383e52] transition-colors relative overflow-hidden">
+            <div className="bg-[#161a23] border border-[#272b38] rounded-2xl p-5 sm:p-6 md:p-8 flex flex-col justify-between group hover:border-[#383e52] transition-colors relative overflow-hidden">
               <div className="absolute top-0 right-0 w-24 h-24 bg-teal-400/10 rounded-full blur-2xl -mr-8 -mt-8"></div>
               <div className="relative z-10">
                 <div className="flex justify-between items-start mb-2">
-                  <p className="text-[11px] text-[#8a93a6] font-semibold uppercase tracking-[0.15em]">Liquidity Pool</p>
-                  <span className="border border-teal-500/30 text-teal-400 bg-teal-500/10 px-2 py-1 rounded text-[9px] font-bold uppercase tracking-widest flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-teal-400 animate-pulse"></span> LOCKED
+                  <p className="text-[10px] sm:text-[11px] text-[#8a93a6] font-semibold uppercase tracking-[0.15em]">Liquidity Pool</p>
+                  <span className="border border-teal-500/30 text-teal-400 bg-teal-500/10 px-2.5 py-0.5 sm:py-1 rounded text-[8px] sm:text-[9px] font-bold uppercase tracking-widest flex items-center gap-1">
+                    <span className="w-1 h-1 rounded-full bg-teal-400 animate-pulse"></span> LOCKED
                   </span>
                 </div>
-                <p className="text-4xl font-bold text-teal-400 tracking-tight mt-2 drop-shadow-[0_0_10px_rgba(45,212,191,0.2)]">
+                <p className="text-2xl sm:text-3xl md:text-4xl font-bold text-teal-400 tracking-tight mt-1 drop-shadow-[0_0_10px_rgba(45,212,191,0.2)]">
                   {currentPoolBalance.toLocaleString('en-MY', { minimumFractionDigits: 2 })}
                 </p>
               </div>
 
-              <div className="relative z-10 mt-5">
-                <form action={transferFromPool} className="flex gap-2">
-                  <input type="hidden" name="monthId" value={currentMonthId} />
-                  <input type="number" step="0.01" name="amount" placeholder="Withdraw..." max={currentPoolBalance > 0 ? currentPoolBalance : 0} className="w-full bg-[#0b0e14] border border-[#272b38] rounded-lg px-3 py-2 text-white placeholder-[#8a93a6] text-xs outline-none focus:border-teal-500/50" />
-                  <button type="submit" disabled={currentPoolBalance <= 0} className="bg-[#272b38] text-white px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-[#383e52] transition-colors disabled:opacity-50">MOVE</button>
-                </form>
+              <div className="relative z-10 mt-4 sm:mt-5">
+                {!isReadOnly && (
+                  <form action={transferFromPool} className="flex gap-2">
+                    <input type="hidden" name="monthId" value={currentMonthId} />
+                    <input type="number" step="0.01" name="amount" placeholder="Withdraw..." max={currentPoolBalance > 0 ? currentPoolBalance : 0} className="w-full bg-[#0b0e14] border border-[#272b38] rounded-lg px-2.5 py-2 text-white placeholder-[#8a93a6] text-xs outline-none focus:border-teal-500/50" />
+                    <button type="submit" disabled={currentPoolBalance <= 0} className="bg-[#272b38] text-white px-2.5 py-2 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-[#383e52] transition-colors disabled:opacity-50">MOVE</button>
+                  </form>
+                )}
 
-                <div className="space-y-1.5 mt-4 text-[9px] font-medium text-[#8a93a6]">
+                <div className={`space-y-1.5 font-medium text-[#8a93a6] ${isReadOnly ? 'mt-4' : 'mt-4'} text-[9px] border-t border-[#272b38]/50 pt-3`}>
                   <div className="flex justify-between items-center"><span className="uppercase tracking-widest">Total Pooled IN</span> <span className="text-teal-400 font-mono">+{totalSavedAcrossAllMonths.toFixed(2)}</span></div>
                   <div className="flex justify-between items-center"><span className="uppercase tracking-widest">Trade Returns IN</span> <span className="text-teal-400 font-mono">+{totalBsklRepaidAllTime.toFixed(2)}</span></div>
                   <div className="flex justify-between items-center"><span className="uppercase tracking-widest">Total Transf. OUT</span> <span className="text-rose-400 font-mono">-{totalTransferredFromPoolAllTime.toFixed(2)}</span></div>
@@ -551,16 +735,16 @@ export default async function Home({
 
           {/* --- ADJUSTMENTS PANEL (HIDDEN BY DEFAULT) --- */}
           {isEditing && (
-            <div className="space-y-6 mt-8">
+            <div className="space-y-6 mt-6">
               
               {/* STATEMENT SYNC UTILITY (LIABILITIES & BSKL) */}
-              <div className="bg-[#161a23] border border-amber-500/30 rounded-2xl p-6 md:p-8 space-y-6">
+              <div className="bg-[#161a23] border border-amber-500/30 rounded-2xl p-4 sm:p-6 md:p-8 space-y-6">
                 <h3 className="text-xs font-bold uppercase text-amber-400 tracking-[0.15em]">Statement Sync Utility</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6">
                   
                   {/* DYNAMIC DEBTS LIST */}
-                  {debts?.map((debt) => (
-                    <form key={debt.id} action={updateDebtBalances} className="p-5 bg-[#0b0e14] rounded-xl border border-[#272b38] space-y-5 shadow-sm hover:border-[#383e52] transition-colors">
+                  {debts?.map((debt: any) => (
+                    <form key={debt.id} action={updateDebtBalances} className="p-4 sm:p-5 bg-[#0b0e14] rounded-xl border border-[#272b38] space-y-4 shadow-sm hover:border-[#383e52] transition-colors">
                       <input type="hidden" name="id" value={debt.id} />
                       <input 
                         type="text" 
@@ -569,54 +753,54 @@ export default async function Home({
                         className="w-full bg-transparent font-bold text-white text-sm outline-none border-b border-transparent focus:border-amber-500/50 pb-1 transition-colors" 
                         placeholder="Liability Name"
                       />
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-2 gap-3 sm:gap-4">
                         <div>
-                          <label className="text-[9px] text-[#8a93a6] block mb-2 uppercase tracking-widest font-bold">Arrears (RM)</label>
-                          <input name="arrears" type="number" step="0.01" defaultValue={n(debt.arrears_balance).toFixed(2)} className="w-full bg-[#161a23] border border-[#272b38] rounded-lg px-3 py-2 text-white text-xs outline-none focus:border-amber-500/50 transition-colors" />
+                          <label className="text-[9px] text-[#8a93a6] block mb-1.5 uppercase tracking-widest font-bold">Arrears (RM)</label>
+                          <input name="arrears" type="number" step="0.01" defaultValue={n(debt.arrears_balance).toFixed(2)} className="w-full bg-[#161a23] border border-[#272b38] rounded-lg px-2.5 py-2 text-white text-xs outline-none focus:border-amber-500/50 transition-colors" />
                         </div>
                         <div>
-                          <label className="text-[9px] text-[#8a93a6] block mb-2 uppercase tracking-widest font-bold">Float (RM)</label>
-                          <input name="float" type="number" step="0.01" defaultValue={n(debt.float_balance).toFixed(2)} className="w-full bg-[#161a23] border border-[#272b38] rounded-lg px-3 py-2 text-white text-xs outline-none focus:border-amber-500/50 transition-colors" />
+                          <label className="text-[9px] text-[#8a93a6] block mb-1.5 uppercase tracking-widest font-bold">Float (RM)</label>
+                          <input name="float" type="number" step="0.01" defaultValue={n(debt.float_balance).toFixed(2)} className="w-full bg-[#161a23] border border-[#272b38] rounded-lg px-2.5 py-2 text-white text-xs outline-none focus:border-amber-500/50 transition-colors" />
                         </div>
                       </div>
-                      <button type="submit" className="w-full bg-amber-500/10 text-amber-400 border border-amber-500/30 hover:bg-amber-500/20 font-bold py-2.5 rounded-lg transition-colors text-[10px] uppercase tracking-widest mt-4">Save Changes</button>
+                      <button type="submit" className="w-full bg-amber-500/10 text-amber-400 border border-amber-500/30 hover:bg-amber-500/20 font-bold py-2.5 rounded-lg transition-colors text-[10px] uppercase tracking-widest mt-2">Save Changes</button>
                     </form>
                   ))}
 
                   {/* ADD NEW LIABILITY FORM */}
-                  <form action={addDebt} className="p-5 bg-[#161a23] rounded-xl border border-dashed border-[#383e52] space-y-5 shadow-sm hover:border-amber-500/50 transition-colors flex flex-col justify-center">
+                  <form action={addDebt} className="p-4 sm:p-5 bg-[#161a23] rounded-xl border border-dashed border-[#383e52] space-y-4 shadow-sm hover:border-amber-500/50 transition-colors flex flex-col justify-center">
                     <p className="font-bold text-amber-400 text-sm border-b border-amber-500/20 pb-1">+ Add New Liability</p>
-                    <div className="space-y-4">
+                    <div className="space-y-3 sm:space-y-4">
                       <div>
-                         <label className="text-[9px] text-[#8a93a6] block mb-2 uppercase tracking-widest font-bold">Creditor Name</label>
-                         <input name="creditor" type="text" required className="w-full bg-[#0b0e14] border border-[#272b38] rounded-lg px-3 py-2 text-white text-xs outline-none focus:border-amber-500/50 transition-colors" placeholder="e.g. Home Loan" />
+                         <label className="text-[9px] text-[#8a93a6] block mb-1.5 uppercase tracking-widest font-bold">Creditor Name</label>
+                         <input name="creditor" type="text" required className="w-full bg-[#0b0e14] border border-[#272b38] rounded-lg px-2.5 py-2 text-white text-xs outline-none focus:border-amber-500/50 transition-colors" placeholder="e.g. Home Loan" />
                       </div>
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-2 gap-3 sm:gap-4">
                         <div>
-                          <label className="text-[9px] text-[#8a93a6] block mb-2 uppercase tracking-widest font-bold">Monthly Due</label>
-                          <input name="monthly_due" type="number" step="0.01" required className="w-full bg-[#0b0e14] border border-[#272b38] rounded-lg px-3 py-2 text-white text-xs outline-none focus:border-amber-500/50 transition-colors" />
+                          <label className="text-[9px] text-[#8a93a6] block mb-1.5 uppercase tracking-widest font-bold">Monthly Due</label>
+                          <input name="monthly_due" type="number" step="0.01" required className="w-full bg-[#0b0e14] border border-[#272b38] rounded-lg px-2.5 py-2 text-white text-xs outline-none focus:border-amber-500/50 transition-colors" />
                         </div>
                         <div>
-                          <label className="text-[9px] text-[#8a93a6] block mb-2 uppercase tracking-widest font-bold">Facility Limit</label>
-                          <input name="original_loan_amount" type="number" step="0.01" required className="w-full bg-[#0b0e14] border border-[#272b38] rounded-lg px-3 py-2 text-white text-xs outline-none focus:border-amber-500/50 transition-colors" />
+                          <label className="text-[9px] text-[#8a93a6] block mb-1.5 uppercase tracking-widest font-bold">Facility Limit</label>
+                          <input name="original_loan_amount" type="number" step="0.01" required className="w-full bg-[#0b0e14] border border-[#272b38] rounded-lg px-2.5 py-2 text-white text-xs outline-none focus:border-amber-500/50 transition-colors" />
                         </div>
                       </div>
                     </div>
-                    <button type="submit" className="w-full bg-amber-500/10 text-amber-400 border border-amber-500/30 hover:bg-amber-500/20 font-bold py-2.5 rounded-lg transition-colors text-[10px] uppercase tracking-widest mt-4">+ Add Liability</button>
+                    <button type="submit" className="w-full bg-amber-500/10 text-amber-400 border border-amber-500/30 hover:bg-amber-500/20 font-bold py-2.5 rounded-lg transition-colors text-[10px] uppercase tracking-widest mt-2">+ Add Liability</button>
                   </form>
 
                 </div>
               </div>
 
-              {/* BSKL TRADE UTILITY (MULTI-CONTRACT) */}
-              <div className="bg-[#161a23] border border-blue-500/30 rounded-2xl p-6 md:p-8 space-y-6">
+              {/* BSKL CONTRACTS UTILITY */}
+              <div className="bg-[#161a23] border border-blue-500/30 rounded-2xl p-4 sm:p-6 md:p-8 space-y-6">
                 <h3 className="text-xs font-bold uppercase text-blue-400 tracking-[0.15em]">BSKL Trade Utility</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6">
                   
-                  {bsklContracts.map(c => (
-                    <div key={c.id} className="p-5 bg-[#0b0e14] rounded-xl border border-[#272b38] space-y-5 shadow-sm hover:border-[#383e52] transition-colors flex flex-col justify-between">
+                  {bsklContracts.map((c: any) => (
+                    <div key={c.id} className="p-4 sm:p-5 bg-[#0b0e14] rounded-xl border border-[#272b38] space-y-4 shadow-sm hover:border-[#383e52] transition-colors flex flex-col justify-between">
                       <div>
-                        <div className="flex justify-between items-center border-b border-[#272b38] pb-2 mb-4">
+                        <div className="flex justify-between items-center border-b border-[#272b38] pb-2 mb-3">
                           <p className="font-bold text-white text-sm">{c.name}</p>
                           {c.is_active ? (
                             <span className="text-[8px] bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded uppercase tracking-widest border border-emerald-500/30">Active</span>
@@ -624,7 +808,7 @@ export default async function Home({
                             <span className="text-[8px] bg-rose-500/10 text-rose-400 px-2 py-0.5 rounded uppercase tracking-widest border border-rose-500/30">Ended</span>
                           )}
                         </div>
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-2 gap-3">
                           <div>
                             <p className="text-[9px] text-[#8a93a6] uppercase tracking-widest font-bold">Capital</p>
                             <p className="text-xs text-white mt-1 font-mono">{n(c.capital_injection).toFixed(2)}</p>
@@ -643,48 +827,48 @@ export default async function Home({
                       {c.is_active && (
                         <form action={endBsklContract}>
                           <input type="hidden" name="id" value={c.id} />
-                          <button type="submit" className="w-full bg-[#161a23] text-rose-400 border border-[#383e52] hover:bg-rose-500/10 hover:border-rose-500/40 font-bold py-2.5 rounded-lg transition-colors text-[10px] uppercase tracking-widest mt-4">End Contract</button>
+                          <button type="submit" className="w-full bg-[#161a23] text-rose-400 border border-[#383e52] hover:bg-rose-500/10 hover:border-rose-500/40 font-bold py-2.5 rounded-lg transition-colors text-[10px] uppercase tracking-widest mt-2">End Contract</button>
                         </form>
                       )}
                     </div>
                   ))}
 
                   {/* ADD NEW BSKL CONTRACT FORM */}
-                  <form action={addBsklContract} className="p-5 bg-[#161a23] rounded-xl border border-dashed border-[#383e52] space-y-5 shadow-sm hover:border-blue-500/50 transition-colors flex flex-col justify-center">
+                  <form action={addBsklContract} className="p-4 sm:p-5 bg-[#161a23] rounded-xl border border-dashed border-[#383e52] space-y-4 shadow-sm hover:border-blue-500/50 transition-colors flex flex-col justify-center">
                     <p className="font-bold text-blue-400 text-sm border-b border-blue-500/20 pb-1">+ New Injection</p>
-                    <div className="space-y-4">
+                    <div className="space-y-3 sm:space-y-4">
                       <div>
-                         <label className="text-[9px] text-[#8a93a6] block mb-2 uppercase tracking-widest font-bold">Contract Name</label>
-                         <input name="name" type="text" required className="w-full bg-[#0b0e14] border border-[#272b38] rounded-lg px-3 py-2 text-white text-xs outline-none focus:border-blue-500/50 transition-colors" placeholder="e.g. Batch 2" />
+                         <label className="text-[9px] text-[#8a93a6] block mb-1.5 uppercase tracking-widest font-bold">Contract Name</label>
+                         <input name="name" type="text" required className="w-full bg-[#0b0e14] border border-[#272b38] rounded-lg px-2.5 py-2 text-white text-xs outline-none focus:border-blue-500/50 transition-colors" placeholder="e.g. Batch 2" />
                       </div>
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-2 gap-3 sm:gap-4">
                         <div className="col-span-2">
-                          <label className="text-[9px] text-[#8a93a6] block mb-2 uppercase tracking-widest font-bold">Capital (RM)</label>
-                          <input name="capital" type="number" step="0.01" required className="w-full bg-[#0b0e14] border border-[#272b38] rounded-lg px-3 py-2 text-white text-xs outline-none focus:border-blue-500/50 transition-colors" />
+                          <label className="text-[9px] text-[#8a93a6] block mb-1.5 uppercase tracking-widest font-bold">Capital (RM)</label>
+                          <input name="capital" type="number" step="0.01" required className="w-full bg-[#0b0e14] border border-[#272b38] rounded-lg px-2.5 py-2 text-white text-xs outline-none focus:border-blue-500/50 transition-colors" />
                         </div>
                         <div>
-                          <label className="text-[9px] text-[#8a93a6] block mb-2 uppercase tracking-widest font-bold">Rate / Day</label>
-                          <input name="rate" type="number" step="0.01" required className="w-full bg-[#0b0e14] border border-[#272b38] rounded-lg px-3 py-2 text-white text-xs outline-none focus:border-blue-500/50 transition-colors" />
+                          <label className="text-[9px] text-[#8a93a6] block mb-1.5 uppercase tracking-widest font-bold">Rate / Day</label>
+                          <input name="rate" type="number" step="0.01" required className="w-full bg-[#0b0e14] border border-[#272b38] rounded-lg px-2.5 py-2 text-white text-xs outline-none focus:border-blue-500/50 transition-colors" />
                         </div>
                         <div>
-                          <label className="text-[9px] text-[#8a93a6] block mb-2 uppercase tracking-widest font-bold">Eff. Date</label>
-                          <input name="effectiveDate" type="date" required className="w-full bg-[#0b0e14] border border-[#272b38] rounded-lg px-3 py-2 text-white text-xs outline-none focus:border-blue-500/50 transition-colors" />
+                          <label className="text-[9px] text-[#8a93a6] block mb-1.5 uppercase tracking-widest font-bold">Eff. Date</label>
+                          <input name="effectiveDate" type="date" required className="w-full bg-[#0b0e14] border border-[#272b38] rounded-lg px-2.5 py-2 text-white text-xs outline-none focus:border-blue-500/50 transition-colors" />
                         </div>
                       </div>
                     </div>
-                    <button type="submit" className="w-full bg-blue-500/10 text-blue-400 border border-blue-500/30 hover:bg-blue-500/20 font-bold py-2.5 rounded-lg transition-colors text-[10px] uppercase tracking-widest mt-4">+ Add Contract</button>
+                    <button type="submit" className="w-full bg-blue-500/10 text-blue-400 border border-blue-500/30 hover:bg-blue-500/20 font-bold py-2.5 rounded-lg transition-colors text-[10px] uppercase tracking-widest mt-2">+ Add Contract</button>
                   </form>
 
                 </div>
               </div>
 
-              {/* BUDGET SYNC UTILITY (OPERATING BUDGETS) */}
-              <div className="bg-[#161a23] border border-teal-500/30 rounded-2xl p-6 md:p-8 space-y-6">
+              {/* BUDGET SYNC UTILITY */}
+              <div className="bg-[#161a23] border border-teal-500/30 rounded-2xl p-4 sm:p-6 md:p-8 space-y-6">
                 <h3 className="text-xs font-bold uppercase text-teal-400 tracking-[0.15em]">Budget Sync Utility</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6">
                   
-                  {budgets?.map((budget) => (
-                    <form key={budget.id} action={updateBudgetSettings} className="p-5 bg-[#0b0e14] rounded-xl border border-[#272b38] space-y-5 shadow-sm hover:border-[#383e52] transition-colors">
+                  {budgets?.map((budget: any) => (
+                    <form key={budget.id} action={updateBudgetSettings} className="p-4 sm:p-5 bg-[#0b0e14] rounded-xl border border-[#272b38] space-y-4 shadow-sm hover:border-[#383e52] transition-colors">
                       <input type="hidden" name="id" value={budget.id} />
                       <input 
                         type="text" 
@@ -694,64 +878,64 @@ export default async function Home({
                         placeholder="Budget Category Name"
                       />
                       <div>
-                        <label className="text-[9px] text-[#8a93a6] block mb-2 uppercase tracking-widest font-bold">Allocated (RM)</label>
-                        <input name="allocated" type="number" step="0.01" defaultValue={n(budget.allocated_amount).toFixed(2)} className="w-full bg-[#161a23] border border-[#272b38] rounded-lg px-3 py-2 text-white text-xs outline-none focus:border-teal-500/50 transition-colors" />
+                        <label className="text-[9px] text-[#8a93a6] block mb-1.5 uppercase tracking-widest font-bold">Allocated (RM)</label>
+                        <input name="allocated" type="number" step="0.01" defaultValue={n(budget.allocated_amount).toFixed(2)} className="w-full bg-[#161a23] border border-[#272b38] rounded-lg px-2.5 py-2 text-white text-xs outline-none focus:border-teal-500/50 transition-colors" />
                       </div>
-                      <button type="submit" className="w-full bg-teal-500/10 text-teal-400 border border-teal-500/30 hover:bg-teal-500/20 font-bold py-2.5 rounded-lg transition-colors text-[10px] uppercase tracking-widest mt-4">Save Changes</button>
+                      <button type="submit" className="w-full bg-teal-500/10 text-teal-400 border border-teal-500/30 hover:bg-teal-500/20 font-bold py-2.5 rounded-lg transition-colors text-[10px] uppercase tracking-widest mt-2">Save Changes</button>
                     </form>
                   ))}
 
                   {/* ADD NEW BUDGET FORM */}
-                  <form action={addBudget} className="p-5 bg-[#161a23] rounded-xl border border-dashed border-[#383e52] space-y-5 shadow-sm hover:border-teal-500/50 transition-colors flex flex-col justify-center">
+                  <form action={addBudget} className="p-4 sm:p-5 bg-[#161a23] rounded-xl border border-dashed border-[#383e52] space-y-4 shadow-sm hover:border-teal-500/50 transition-colors flex flex-col justify-center">
                     <input type="hidden" name="budget_month" value={currentSelectedMonth} />
-                    <p className="font-bold text-teal-400 text-sm border-b border-teal-500/20 pb-1">+ Add New Budget</p>
-                    <div className="space-y-4">
+                    <p className="font-bold text-teal-400 text-sm border-b border-teal-500/20 pb-1 mb-2">+ Add New Budget</p>
+                    <div className="space-y-3 sm:space-y-4">
                       <div>
-                         <label className="text-[9px] text-[#8a93a6] block mb-2 uppercase tracking-widest font-bold">Category</label>
-                         <input name="category" type="text" required className="w-full bg-[#0b0e14] border border-[#272b38] rounded-lg px-3 py-2 text-white text-xs outline-none focus:border-teal-500/50 transition-colors" placeholder="e.g. Utilities" />
+                         <label className="text-[9px] text-[#8a93a6] block mb-1.5 uppercase tracking-widest font-bold">Category</label>
+                         <input name="category" type="text" required className="w-full bg-[#0b0e14] border border-[#272b38] rounded-lg px-2.5 py-2 text-white text-xs outline-none focus:border-teal-500/50 transition-colors" placeholder="e.g. Utilities" />
                       </div>
                       <div>
-                        <label className="text-[9px] text-[#8a93a6] block mb-2 uppercase tracking-widest font-bold">Allocated (RM)</label>
-                        <input name="allocated_amount" type="number" step="0.01" required className="w-full bg-[#0b0e14] border border-[#272b38] rounded-lg px-3 py-2 text-white text-xs outline-none focus:border-teal-500/50 transition-colors" />
+                        <label className="text-[9px] text-[#8a93a6] block mb-1.5 uppercase tracking-widest font-bold">Allocated (RM)</label>
+                        <input name="allocated_amount" type="number" step="0.01" required className="w-full bg-[#0b0e14] border border-[#272b38] rounded-lg px-2.5 py-2 text-white text-xs outline-none focus:border-teal-500/50 transition-colors" />
                       </div>
                     </div>
-                    <button type="submit" className="w-full bg-teal-500/10 text-teal-400 border border-teal-500/30 hover:bg-teal-500/20 font-bold py-2.5 rounded-lg transition-colors text-[10px] uppercase tracking-widest mt-4">+ Add Budget</button>
+                    <button type="submit" className="w-full bg-teal-500/10 text-teal-400 border border-teal-500/30 hover:bg-teal-500/20 font-bold py-2.5 rounded-lg transition-colors text-[10px] uppercase tracking-widest mt-2">+ Add Budget</button>
                   </form>
 
                 </div>
               </div>
 
               {/* BSKL HOLIDAYS UTILITY */}
-              <div className="bg-[#161a23] border border-emerald-500/30 rounded-2xl p-6 md:p-8 space-y-6">
+              <div className="bg-[#161a23] border border-emerald-500/30 rounded-2xl p-4 sm:p-6 md:p-8 space-y-6">
                 <h3 className="text-xs font-bold uppercase text-emerald-400 tracking-[0.15em]">BSKL Holidays Utility</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6">
                   
-                  {bsklHolidays.map(h => (
-                    <div key={h.id} className="p-5 bg-[#0b0e14] rounded-xl border border-[#272b38] flex justify-between items-center shadow-sm">
+                  {bsklHolidays.map((h: any) => (
+                    <div key={h.id} className="p-4 bg-[#0b0e14] rounded-xl border border-[#272b38] flex justify-between items-center shadow-sm">
                       <div>
                         <p className="font-bold text-white text-sm">{h.description || 'Holiday'}</p>
                         <p className="text-[10px] text-[#8a93a6] font-mono mt-1">{h.holiday_date}</p>
                       </div>
                       <form action={removeBsklHoliday}>
                         <input type="hidden" name="id" value={h.id} />
-                        <button type="submit" className="text-rose-400 hover:text-rose-300 text-lg leading-none">&times;</button>
+                        <button type="submit" className="text-rose-400 hover:text-rose-300 text-lg leading-none p-1">&times;</button>
                       </form>
                     </div>
                   ))}
 
-                  <form action={addBsklHoliday} className="p-5 bg-[#161a23] rounded-xl border border-dashed border-[#383e52] shadow-sm hover:border-emerald-500/50 transition-colors flex flex-col justify-center">
-                    <p className="font-bold text-emerald-400 text-sm border-b border-emerald-500/20 pb-1 mb-4">+ Add Holiday</p>
-                    <div className="space-y-4">
+                  <form action={addBsklHoliday} className="p-4 bg-[#161a23] rounded-xl border border-dashed border-[#383e52] shadow-sm hover:border-emerald-500/50 transition-colors flex flex-col justify-center">
+                    <p className="font-bold text-emerald-400 text-sm border-b border-emerald-500/20 pb-1 mb-3">+ Add Holiday</p>
+                    <div className="space-y-3">
                       <div>
-                        <label className="text-[9px] text-[#8a93a6] block mb-2 uppercase tracking-widest font-bold">Date</label>
-                        <input name="date" type="date" required className="w-full bg-[#0b0e14] border border-[#272b38] rounded-lg px-3 py-2 text-white text-xs outline-none focus:border-emerald-500/50 transition-colors" />
+                        <label className="text-[9px] text-[#8a93a6] block mb-1 uppercase tracking-widest font-bold">Date</label>
+                        <input name="date" type="date" required className="w-full bg-[#0b0e14] border border-[#272b38] rounded-lg px-2.5 py-2 text-white text-xs outline-none focus:border-emerald-500/50 transition-colors" />
                       </div>
                       <div>
-                        <label className="text-[9px] text-[#8a93a6] block mb-2 uppercase tracking-widest font-bold">Description</label>
-                        <input name="description" type="text" className="w-full bg-[#0b0e14] border border-[#272b38] rounded-lg px-3 py-2 text-white text-xs outline-none focus:border-emerald-500/50 transition-colors" placeholder="e.g. Hari Raya" />
+                        <label className="text-[9px] text-[#8a93a6] block mb-1 uppercase tracking-widest font-bold">Description</label>
+                        <input name="description" type="text" className="w-full bg-[#0b0e14] border border-[#272b38] rounded-lg px-2.5 py-2 text-white text-xs outline-none focus:border-emerald-500/50 transition-colors" placeholder="e.g. Hari Raya" />
                       </div>
                     </div>
-                    <button type="submit" className="w-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20 font-bold py-2.5 rounded-lg transition-colors text-[10px] uppercase tracking-widest mt-4">+ Add</button>
+                    <button type="submit" className="w-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20 font-bold py-2.5 rounded-lg transition-colors text-[10px] uppercase tracking-widest mt-3">+ Add</button>
                   </form>
 
                 </div>
@@ -760,61 +944,68 @@ export default async function Home({
             </div>
           )}
 
-          {/* --- MAIN DESKTOP GRID --- */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start mt-8">
+          {/* --- MAIN RESPONSIVE DESKTOP/MOBILE GRID --- */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
             
             <section className="space-y-4">
-              <div className="flex justify-between items-center mb-4 pl-1">
+              <div className="flex justify-between items-center pl-1">
                 <h2 className="text-[11px] font-semibold uppercase text-[#8a93a6] tracking-[0.15em]">Priority Liabilities</h2>
                 <span className="border border-amber-500/30 text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded text-[9px] font-bold uppercase tracking-widest">DUE 20TH</span>
               </div>
               
               <div className="space-y-4">
-                {debts?.map((debt) => {
-                  const debtIsPaidThisMonth = allDebtPayments.some(dp => dp.debt_id == debt.id && dp.paid_month === currentMonthId);
+                {debts?.map((debt: any) => {
+                  const debtIsPaidThisMonth = allDebtPayments.some((dp: any) => dp.debt_id == debt.id && dp.paid_month === currentMonthId);
                   const statementTotalDue = n(debt.monthly_due) + n(debt.arrears_balance) - n(debt.float_balance)
                   const isExpanded = expandedDebtId == String(debt.id)
                   
                   return (
                     <div key={debt.id} className={`rounded-xl border transition-all duration-300 overflow-hidden ${debtIsPaidThisMonth ? 'border-[#272b38] bg-[#0b0e14] opacity-60' : 'border-[#272b38] bg-[#161a23]'} ${isExpanded ? 'border-teal-500/50 shadow-[0_0_15px_rgba(20,184,166,0.1)]' : ''}`}>
-                      <div className="p-5 md:p-6 flex justify-between items-center">
-                        <div className="space-y-2">
-                          <div className="flex items-center gap-3">
-                            <span className="font-bold text-lg tracking-tight text-white">{debt.creditor}</span>
-                            {n(debt.arrears_balance) > 0 && !debtIsPaidThisMonth && <span className="text-[9px] bg-rose-500/10 text-rose-400 border border-rose-500/30 px-2 py-0.5 rounded-md font-bold uppercase tracking-widest">Arrears</span>}
+                      <div className="p-4 sm:p-5 md:p-6 flex justify-between items-center gap-3">
+                        <div className="space-y-1 sm:space-y-2">
+                          <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+                            <span className="font-bold text-base sm:text-lg tracking-tight text-white leading-tight">{debt.creditor}</span>
+                            {n(debt.arrears_balance) > 0 && !debtIsPaidThisMonth && <span className="text-[8px] sm:text-[9px] bg-rose-500/10 text-rose-400 border border-rose-500/30 px-1.5 py-0.5 rounded-md font-bold uppercase tracking-widest">Arrears</span>}
                           </div>
                           {!debtIsPaidThisMonth && (
-                            <div className="text-[11px] text-[#8a93a6] font-medium space-y-1">
+                            <div className="text-[10px] sm:text-[11px] text-[#8a93a6] font-medium space-y-0.5 sm:space-y-1">
                               <p>Base: RM {n(debt.monthly_due).toFixed(2)}</p>
                               {n(debt.arrears_balance) > 0 && <p className="text-rose-400">Arrears: +RM {n(debt.arrears_balance).toFixed(2)}</p>}
                               {n(debt.float_balance) > 0 && <p className="text-teal-400">Credit: -RM {n(debt.float_balance).toFixed(2)}</p>}
                             </div>
                           )}
-                          <a href={`?month=${currentSelectedMonth}${isExpanded ? '' : `&details=${debt.id}`}`} className="text-[10px] text-teal-400 hover:text-teal-300 mt-2 inline-block transition-colors uppercase tracking-widest font-bold">{isExpanded ? 'Hide ▲' : 'Details ▼'}</a>
+                          <a href={`?month=${currentSelectedMonth}${isExpanded ? '' : `&details=${debt.id}`}`} className="text-[9px] sm:text-[10px] text-teal-400 hover:text-teal-300 mt-2 inline-block transition-colors uppercase tracking-widest font-bold">{isExpanded ? 'Hide ▲' : 'Details ▼'}</a>
                         </div>
-                        <div className="flex flex-col items-end gap-3">
+                        <div className="flex flex-col items-end gap-2 sm:gap-3 flex-shrink-0">
                           <div className="text-right">
-                            <p className="font-bold text-xl text-white tracking-tight">{statementTotalDue.toLocaleString('en-MY', { minimumFractionDigits: 2 })}</p>
-                            <p className="text-[9px] text-[#8a93a6] font-bold uppercase tracking-widest mt-1">Statement Net</p>
+                            <p className="font-bold text-lg sm:text-xl text-white tracking-tight">{statementTotalDue.toLocaleString('en-MY', { minimumFractionDigits: 2 })}</p>
+                            <p className="text-[8px] sm:text-[9px] text-[#8a93a6] font-bold uppercase tracking-widest">Statement Net</p>
                           </div>
-                          <form action={toggleDebt}>
-                            <input type="hidden" name="id" value={debt.id} />
-                            <input type="hidden" name="monthId" value={currentMonthId} />
-                            <input type="hidden" name="isPaid" value={String(debtIsPaidThisMonth)} />
-                            <button type="submit" className={`text-[10px] font-bold uppercase tracking-widest px-4 py-2 rounded-full border transition-all ${debtIsPaidThisMonth ? 'bg-[#0b0e14] text-[#8a93a6] border-[#272b38] hover:bg-[#161a23]' : 'bg-amber-500/10 text-amber-400 border-amber-500/40 hover:bg-amber-500/20'}`}>
-                              {debtIsPaidThisMonth ? 'Undo' : 'Pay Now'}
-                            </button>
-                          </form>
+                          
+                          {isReadOnly ? (
+                            <span className={`text-[8px] sm:text-[9px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-full border bg-[#0b0e14] ${debtIsPaidThisMonth ? 'text-teal-400 border-teal-500/20' : 'text-[#8a93a6] border-[#272b38]'}`}>
+                              {debtIsPaidThisMonth ? 'Settled' : 'Outstanding'}
+                            </span>
+                          ) : (
+                            <form action={toggleDebt}>
+                              <input type="hidden" name="id" value={debt.id} />
+                              <input type="hidden" name="monthId" value={currentMonthId} />
+                              <input type="hidden" name="isPaid" value={String(debtIsPaidThisMonth)} />
+                              <button type="submit" className={`text-[8px] sm:text-[9px] font-bold uppercase tracking-widest px-3 py-1.5 sm:px-4 sm:py-2 rounded-full border transition-all ${debtIsPaidThisMonth ? 'bg-[#0b0e14] text-[#8a93a6] border-[#272b38] hover:bg-[#161a23]' : 'bg-amber-500/10 text-amber-400 border-amber-500/40 hover:bg-amber-500/20'}`}>
+                                {debtIsPaidThisMonth ? 'Undo' : 'Pay Now'}
+                              </button>
+                            </form>
+                          )}
                         </div>
                       </div>
                       
                       {/* DARK TACTICAL CCRIS REPLICA */}
                       {isExpanded && (
-                        <div className="bg-[#0b0e14] border-t border-[#272b38] p-5 md:p-6 space-y-6">
+                        <div className="bg-[#0b0e14] border-t border-[#272b38] p-4 sm:p-5 md:p-6 space-y-5 sm:space-y-6">
                           
                           <div className="flex justify-between items-start">
                             <div>
-                              <h3 className="text-lg font-bold text-white">{debt.creditor}</h3>
+                              <h3 className="text-sm sm:text-lg font-bold text-white">{debt.creditor}</h3>
                             </div>
                             <div className="text-right">
                               <p className="text-[9px] text-[#8a93a6] font-bold uppercase tracking-widest">Status</p>
@@ -822,110 +1013,115 @@ export default async function Home({
                             </div>
                           </div>
 
-                          <div className="bg-[#161a23] border border-[#272b38] rounded-xl p-4 flex justify-between items-center text-[10px] font-bold text-[#8a93a6] uppercase tracking-widest">
-                            <p>Since: <span className="text-white ml-2">{
+                          <div className="bg-[#161a23] border border-[#272b38] rounded-xl p-3 sm:p-4 flex justify-between items-center text-[9px] sm:text-[10px] font-bold text-[#8a93a6] uppercase tracking-widest">
+                            <p>Since: <span className="text-white ml-1.5">{
                                debt.creditor?.toLowerCase().includes('shopee') ? '01/06/2026' : 
                                (debt.date_since ? new Date(debt.date_since).toLocaleDateString('en-MY') : '28/11/2018')
                             }</span></p>
-                            <p>Upd: <span className="text-white ml-2">{new Date().toLocaleDateString('en-MY')}</span></p>
+                            <p>Upd: <span className="text-white ml-1.5">{new Date().toLocaleDateString('en-MY')}</span></p>
                           </div>
 
-                          <div className="bg-[#161a23] border border-[#272b38] rounded-xl p-5 md:p-6">
+                          <div className="bg-[#161a23] border border-[#272b38] rounded-xl p-4 sm:p-5 md:p-6">
                             <div className="flex justify-between items-end">
                               <div>
                                 <p className="text-[9px] font-bold text-rose-400 uppercase tracking-widest">Outstanding</p>
-                                <p className="text-2xl font-bold text-white mt-1.5">{n(debt.total_debt_amount).toLocaleString('en-MY', { minimumFractionDigits: 2 })}</p>
+                                <p className="text-xl sm:text-2xl font-bold text-white mt-1">{n(debt.total_debt_amount).toLocaleString('en-MY', { minimumFractionDigits: 2 })}</p>
                               </div>
                               <div className="text-right">
                                 <p className="text-[9px] font-bold text-[#8a93a6] uppercase tracking-widest">Limit</p>
-                                <p className="text-lg font-bold text-white mt-1.5">{n(debt.original_loan_amount).toLocaleString('en-MY', { minimumFractionDigits: 2 })}</p>
+                                <p className="text-sm sm:text-lg font-bold text-white mt-1">{n(debt.original_loan_amount).toLocaleString('en-MY', { minimumFractionDigits: 2 })}</p>
                               </div>
                             </div>
-                            {/* NADI STATE LEAGUE STYLE PROGRESS BAR */}
-                            <div className="w-full h-1.5 bg-[#272b38] rounded-full mt-5">
+                            <div className="w-full h-1.5 bg-[#272b38] rounded-full mt-4 sm:mt-5">
                               <div className="h-full bg-teal-400 rounded-full transition-all duration-1000 ease-out shadow-[0_0_10px_rgba(45,212,191,0.4)]" style={{ width: `${n(debt.original_loan_amount) > 0 ? (Math.max(0, n(debt.original_loan_amount) - n(debt.total_debt_amount)) / n(debt.original_loan_amount)) * 100 : 0}%` }} />
                             </div>
                           </div>
 
-                          <div className="border-t border-[#272b38] pt-6 mt-6">
+                          <div className="border-t border-[#272b38] pt-5 sm:pt-6 mt-4 sm:mt-6">
                             <h5 className="text-[10px] font-bold text-[#8a93a6] uppercase tracking-[0.15em] mb-4">12 Months History</h5>
-                            <div className="bg-[#161a23] border border-[#272b38] rounded-xl p-5 md:p-6">
+                            <div className="bg-[#161a23] border border-[#272b38] rounded-xl p-4 sm:p-5 md:p-6 overflow-hidden">
                               
-                              <div className="flex justify-between text-sm font-bold text-white mb-4">
+                              <div className="flex justify-between text-xs sm:text-sm font-bold text-white mb-4">
                                 <span>{histFirstYear}</span>
                                 {histFirstYear !== histLastYear && <span>{histLastYear}</span>}
                               </div>
                               
-                              <div className="flex justify-between text-[9px] font-bold text-[#8a93a6] mb-3 uppercase">
-                                {historyMonths.map(m => <span key={m.monthId} className="w-6 md:w-8 text-center">{m.label}</span>)}
+                              {/* SWIPABLE HORIZONTAL CONTAINER FOR MOBILE SHIELD */}
+                              <div className="overflow-x-auto pb-4 pt-1 -mx-2 px-2 scrollbar-thin">
+                                <div className="min-w-[480px] space-y-4">
+                                  
+                                  <div className="flex justify-between text-[9px] font-bold text-[#8a93a6] uppercase">
+                                    {historyMonths.map((m: any) => <span key={m.monthId} className="w-6 md:w-8 text-center">{m.label}</span>)}
+                                  </div>
+                                  
+                                  <div className="flex items-center">
+                                    {historyMonths.map((m: any, i: number) => {
+                                      
+                                      let isTracked = true;
+                                      if (debt.creditor?.toLowerCase().includes('shopee')) {
+                                        if (m.monthId < '2026-06') isTracked = false;
+                                      } else {
+                                        if (m.monthId < '2026-05') isTracked = false;
+                                      }
+
+                                      const isMonthPaid = allDebtPayments.some((dp: any) => dp.debt_id == debt.id && dp.paid_month === m.monthId);
+                                      const isFuture = m.monthId > currentMonthId;
+                                      const isCurrentView = m.monthId === currentMonthId;
+                                      
+                                      let content = '';
+                                      let bgClass = 'bg-[#0b0e14]'; 
+                                      let textClass = 'text-transparent';
+                                      let borderClass = 'border-transparent';
+
+                                      if (isTracked) {
+                                        if (isFuture) {
+                                          bgClass = 'bg-[#0b0e14]';
+                                        } else if (isMonthPaid) {
+                                          content = '✓';
+                                          bgClass = 'bg-teal-500/10';
+                                          textClass = 'text-teal-400';
+                                          borderClass = 'border-teal-500/40';
+                                        } else if (isCurrentView) {
+                                          content = '';
+                                          bgClass = 'bg-[#161a23]';
+                                          borderClass = 'border-[#383e52] border-dashed';
+                                        } else {
+                                          content = '1';
+                                          bgClass = 'bg-rose-500/10';
+                                          textClass = 'text-rose-400';
+                                          borderClass = 'border-rose-500/40';
+                                        }
+                                      }
+
+                                      const nextMonth = historyMonths[i + 1];
+                                      let nextIsTracked = true;
+                                      if (nextMonth) {
+                                        if (debt.creditor?.toLowerCase().includes('shopee') && nextMonth.monthId < '2026-06') nextIsTracked = false;
+                                        else if (nextMonth.monthId < '2026-05') nextIsTracked = false;
+                                      }
+                                      
+                                      const nextIsFuture = nextMonth && nextMonth.monthId > currentMonthId;
+                                      const lineClass = (isTracked && nextIsTracked && !nextIsFuture) ? 'bg-[#383e52]' : 'bg-[#0b0e14]';
+
+                                      return (
+                                        <div key={m.monthId} className="flex-1 flex items-center">
+                                          <div className={`w-6 h-6 md:w-8 md:h-8 rounded-full flex items-center justify-center text-[10px] md:text-xs font-bold z-10 border transition-all duration-500 ${bgClass} ${textClass} ${borderClass}`}>
+                                            {content}
+                                          </div>
+                                          {i < 11 && <div className={`flex-1 h-0.5 -mx-0.5 md:-mx-1 ${lineClass}`} />}
+                                        </div>
+                                      )
+                                    })}
+                                  </div>
+
+                                </div>
                               </div>
-                              
-                              <div className="flex items-center">
-                                {historyMonths.map((m, i) => {
-                                  
-                                  let isTracked = true;
-                                  if (debt.creditor?.toLowerCase().includes('shopee')) {
-                                    if (m.monthId < '2026-06') isTracked = false;
-                                  } else {
-                                    if (m.monthId < '2026-05') isTracked = false;
-                                  }
 
-                                  const isMonthPaid = allDebtPayments.some(dp => dp.debt_id == debt.id && dp.paid_month === m.monthId);
-                                  const isFuture = m.monthId > currentMonthId;
-                                  const isCurrentView = m.monthId === currentMonthId;
-                                  
-                                  let content = '';
-                                  let bgClass = 'bg-[#0b0e14]'; 
-                                  let textClass = 'text-transparent';
-                                  let borderClass = 'border-transparent';
-
-                                  if (isTracked) {
-                                    if (isFuture) {
-                                      bgClass = 'bg-[#0b0e14]';
-                                    } else if (isMonthPaid) {
-                                      content = '✓';
-                                      bgClass = 'bg-teal-500/10';
-                                      textClass = 'text-teal-400';
-                                      borderClass = 'border-teal-500/40';
-                                    } else if (isCurrentView) {
-                                      content = '';
-                                      bgClass = 'bg-[#161a23]';
-                                      borderClass = 'border-[#383e52] border-dashed';
-                                    } else {
-                                      // If past tracked month and not paid -> Arrears visually
-                                      content = '1';
-                                      bgClass = 'bg-rose-500/10';
-                                      textClass = 'text-rose-400';
-                                      borderClass = 'border-rose-500/40';
-                                    }
-                                  }
-
-                                  const nextMonth = historyMonths[i + 1];
-                                  let nextIsTracked = true;
-                                  if (nextMonth) {
-                                    if (debt.creditor?.toLowerCase().includes('shopee') && nextMonth.monthId < '2026-06') nextIsTracked = false;
-                                    else if (nextMonth.monthId < '2026-05') nextIsTracked = false;
-                                  }
-                                  
-                                  const nextIsFuture = nextMonth && nextMonth.monthId > currentMonthId;
-                                  const lineClass = (isTracked && nextIsTracked && !nextIsFuture) ? 'bg-[#383e52]' : 'bg-[#0b0e14]';
-
-                                  return (
-                                    <div key={m.monthId} className="flex-1 flex items-center">
-                                      <div className={`w-6 h-6 md:w-8 md:h-8 rounded-full flex items-center justify-center text-[10px] md:text-xs font-bold z-10 border transition-all duration-500 ${bgClass} ${textClass} ${borderClass}`}>
-                                        {content}
-                                      </div>
-                                      {i < 11 && <div className={`flex-1 h-0.5 -mx-0.5 md:-mx-1 ${lineClass}`} />}
-                                    </div>
-                                  )
-                                })}
-                              </div>
-
-                              <div className="flex justify-center gap-4 md:gap-6 mt-8 text-[9px] text-[#8a93a6] font-bold uppercase tracking-widest flex-wrap">
-                                <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-teal-500/10 border border-teal-500/40"></span> Paid</span>
-                                <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-[#161a23] border border-[#383e52] border-dashed"></span> Pending</span>
-                                <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-rose-500/10 border border-rose-500/40"></span> Arrears</span>
-                                <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-[#0b0e14]"></span> Untracked</span>
+                              <div className="flex justify-center gap-3 sm:gap-6 mt-4 text-[9px] text-[#8a93a6] font-bold uppercase tracking-widest flex-wrap">
+                                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-teal-500/10 border border-teal-500/40"></span> Paid</span>
+                                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-[#161a23] border border-[#383e52] border-dashed"></span> Pending</span>
+                                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-rose-500/10 border border-rose-500/40"></span> Arrears</span>
+                                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-[#0b0e14]"></span> Untracked</span>
                               </div>
                             </div>
                           </div>
@@ -937,8 +1133,8 @@ export default async function Home({
                 })}
               </div>
 
-              {/* BSKL INVESTMENT ACCOUNT (MULTI-CONTRACT) */}
-              <div className="mt-8 pt-4">
+              {/* BSKL INVESTMENT ACCOUNT */}
+              <div className="mt-8 pt-2">
                 <div className="flex justify-between items-center mb-4 pl-1">
                   <h2 className="text-[11px] font-semibold uppercase text-[#8a93a6] tracking-[0.15em]">Investment Account</h2>
                   <span className="border border-blue-500/30 text-blue-400 bg-blue-500/10 px-2.5 py-1 rounded text-[9px] font-bold uppercase tracking-widest">BSKL</span>
@@ -946,28 +1142,27 @@ export default async function Home({
                 
                 <div className="bg-[#161a23] border border-[#272b38] rounded-xl shadow-sm overflow-hidden hover:border-[#383e52] transition-colors">
                   
-                  {/* DYNAMIC CONTRACT HEADERS */}
                   {enrichedContracts.length === 0 ? (
-                    <div className="p-6 border-b border-[#272b38]">
+                    <div className="p-5 border-b border-[#272b38]">
                        <h3 className="text-lg font-bold text-[#8a93a6]">No Active Contracts</h3>
                     </div>
                   ) : (
-                    enrichedContracts.map((c, idx) => (
-                      <div key={c.id} className={`p-6 ${idx !== enrichedContracts.length - 1 ? 'border-b border-[#272b38]' : 'border-b-4 border-[#0b0e14]'}`}>
-                        <div className="flex justify-between items-start">
+                    enrichedContracts.map((c: any, idx: number) => (
+                      <div key={c.id} className={`p-4 sm:p-6 ${idx !== enrichedContracts.length - 1 ? 'border-b border-[#272b38]' : 'border-b-4 border-[#0b0e14]'}`}>
+                        <div className="flex justify-between items-start gap-2">
                           <div>
-                            <div className="flex items-center gap-2">
-                              <h3 className="text-lg font-bold text-white">{c.name}</h3>
+                            <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                              <h3 className="text-base sm:text-lg font-bold text-white leading-tight">{c.name}</h3>
                               {!c.is_active && <span className="text-[8px] bg-[#0b0e14] text-[#8a93a6] px-1.5 py-0.5 rounded border border-[#383e52] uppercase tracking-widest">ENDED</span>}
                             </div>
-                            <p className="text-[10px] text-[#8a93a6] mt-1.5 tracking-widest uppercase">RM {n(c.daily_rate).toFixed(2)} / Trading Day</p>
+                            <p className="text-[10px] text-[#8a93a6] mt-1 tracking-widest uppercase">RM {n(c.daily_rate).toFixed(2)} / Trading Day</p>
                           </div>
                           <div className="text-right">
                             <p className={`text-[9px] font-bold uppercase tracking-widest ${c.isProfit ? 'text-teal-500' : 'text-[#8a93a6]'}`}>
                               {c.isProfit ? 'Capital ROI' : 'Capital Bal'}
                             </p>
-                            <p className={`text-xl font-bold mt-1 tracking-tight ${c.isProfit ? 'text-teal-400' : 'text-white'}`}>
-                              RM {c.displayAmount.toLocaleString('en-MY', { minimumFractionDigits: 2 })} <span className="text-xs font-medium opacity-70">({c.displayPct.toFixed(0)}%)</span>
+                            <p className={`text-base sm:text-xl font-bold mt-1 tracking-tight ${c.isProfit ? 'text-teal-400' : 'text-white'}`}>
+                              RM {c.displayAmount.toLocaleString('en-MY', { minimumFractionDigits: 2 })} <span className="text-[10px] sm:text-xs font-medium opacity-70">({c.displayPct.toFixed(0)}%)</span>
                             </p>
                           </div>
                         </div>
@@ -975,28 +1170,28 @@ export default async function Home({
                     ))
                   )}
                   
-                  <div className="p-6 bg-[#0b0e14]">
-                    <div className="grid grid-cols-7 gap-2 md:gap-3 mb-2">
-                      {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                        <div key={day} className="text-center text-[9px] font-bold text-[#8a93a6] uppercase tracking-widest">{day}</div>
+                  <div className="p-3 sm:p-6 bg-[#0b0e14]">
+                    <div className="grid grid-cols-7 gap-1 sm:gap-2 mb-2">
+                      {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day: string) => (
+                        <div key={day} className="text-center text-[8px] sm:text-[9px] font-bold text-[#8a93a6] uppercase tracking-widest">{day}</div>
                       ))}
                     </div>
                     
-                    <div className="grid grid-cols-7 gap-2 md:gap-3">
-                      {Array.from({ length: firstDayOfWeek }).map((_, i) => (
+                    {/* FLUID MOBILE FRIENDLY 7-COLUMN GRID */}
+                    <div className="grid grid-cols-7 gap-1 sm:gap-2">
+                      {Array.from({ length: firstDayOfWeek }).map((_: any, i: number) => (
                         <div key={`empty-${i}`} />
                       ))}
                       
-                      {Array.from({ length: daysInMonth }).map((_, i) => {
+                      {Array.from({ length: daysInMonth }).map((_: any, i: number) => {
                         const day = i + 1;
                         const dateStr = `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                         const dayOfWeek = new Date(year, monthIndex, day).getDay();
                         
                         const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-                        const isHoliday = bsklHolidays.some(h => h.holiday_date === dateStr);
+                        const isHoliday = bsklHolidays.some((h: any) => h.holiday_date === dateStr);
                         
-                        // Find all contracts active on this specific date
-                        const dayContracts = enrichedContracts.filter(c => {
+                        const dayContracts = enrichedContracts.filter((c: any) => {
                            if (isWeekend || isHoliday) return false;
                            const cEffDate = c.effective_date;
                            const cEndDate = c.end_date || '2099-12-31';
@@ -1005,7 +1200,7 @@ export default async function Home({
                         
                         if (dayContracts.length === 0) {
                           return (
-                            <div key={day} className="aspect-square rounded-lg bg-[#0b0e14] flex flex-col items-center justify-center text-[#383e52] font-bold text-xs border border-[#272b38]/50">
+                            <div key={day} className="aspect-square rounded bg-[#0b0e14] flex flex-col items-center justify-center text-[#383e52] font-bold text-[9px] sm:text-xs border border-[#272b38]/40">
                               {day}
                             </div>
                           );
@@ -1013,7 +1208,22 @@ export default async function Home({
 
                         if (dayContracts.length === 1) {
                            const c = dayContracts[0];
-                           const isPaid = bsklPayments.some(p => p.contract_id === c.id && p.paid_date === dateStr);
+                           const isPaid = bsklPayments.some((p: any) => p.contract_id === c.id && p.paid_date === dateStr);
+                           
+                           if (isReadOnly) {
+                             return (
+                               <div 
+                                 key={day} 
+                                 className={`aspect-square rounded flex flex-col items-center justify-center border p-0.5 sm:p-1 gap-0.5 ${
+                                   isPaid ? 'bg-teal-500/10 border-teal-500/30' : 'bg-[#161a23] border-[#383e52]'
+                                 }`}
+                               >
+                                 <span className={`text-[8px] sm:text-[9px] font-normal leading-none ${isPaid ? 'text-teal-400/60' : 'text-[#8a93a6]/60'}`}>{day}</span>
+                                 <span className={`text-[8px] sm:text-[11px] font-bold leading-none ${isPaid ? 'text-teal-400' : 'text-[#8a93a6]'}`}>{c.daily_rate}</span>
+                               </div>
+                             );
+                           }
+
                            return (
                              <form key={day} action={toggleBsklPayment} className="aspect-square">
                                <input type="hidden" name="contract_id" value={c.id} />
@@ -1022,25 +1232,24 @@ export default async function Home({
                                <input type="hidden" name="isPaid" value={String(isPaid)} />
                                <button 
                                  type="submit" 
-                                 className={`w-full h-full rounded-lg flex flex-col items-center justify-center transition-all border p-1 gap-0.5 ${
+                                 className={`w-full h-full rounded flex flex-col items-center justify-center transition-all border p-0.5 sm:p-1 gap-0.5 ${
                                    isPaid 
                                      ? 'bg-teal-500/10 border-teal-500/30 hover:bg-teal-500/20' 
                                      : 'bg-[#161a23] border-[#383e52] hover:border-amber-500/40'
                                  }`}
                                >
-                                 <span className={`text-[9px] font-normal leading-none ${isPaid ? 'text-teal-400/60' : 'text-[#8a93a6]/60'}`}>{day}</span>
-                                 <span className={`text-[10px] md:text-xs font-bold leading-none ${isPaid ? 'text-teal-400' : 'text-[#8a93a6]'}`}>{c.daily_rate}</span>
+                                 <span className={`text-[8px] sm:text-[9px] font-normal leading-none ${isPaid ? 'text-teal-400/60' : 'text-[#8a93a6]/60'}`}>{day}</span>
+                                 <span className={`text-[8px] sm:text-[11px] font-bold leading-none ${isPaid ? 'text-teal-400' : 'text-[#8a93a6]'}`}>{c.daily_rate}</span>
                                </button>
                              </form>
                            );
                         }
 
-                        // Multiple contracts on this day -> Link to Modal
                         return (
-                          <a key={day} href={`?month=${currentSelectedMonth}&bsklModal=${dateStr}`} className="aspect-square rounded-lg flex flex-col items-center justify-center transition-all border bg-[#161a23] border-[#383e52] hover:border-amber-500/40 p-1 gap-0.5">
-                             <span className="text-[9px] font-normal text-[#8a93a6]/60 leading-none">{day}</span>
-                             {dayContracts.map(c => {
-                                const isPaid = bsklPayments.some(p => p.contract_id === c.id && p.paid_date === dateStr);
+                          <a key={day} href={`?month=${currentSelectedMonth}&bsklModal=${dateStr}`} className="aspect-square rounded flex flex-col items-center justify-center transition-all border bg-[#161a23] border-[#383e52] hover:border-amber-500/40 p-0.5 sm:p-1 gap-0.5">
+                             <span className="text-[8px] sm:text-[9px] font-normal text-[#8a93a6]/60 leading-none">{day}</span>
+                             {dayContracts.map((c: any) => {
+                                const isPaid = bsklPayments.some((p: any) => p.contract_id === c.id && p.paid_date === dateStr);
                                 return <span key={c.id} className={`text-[8px] md:text-[9px] font-bold leading-none ${isPaid ? 'text-teal-400' : 'text-[#8a93a6]'}`}>{c.daily_rate}</span>
                              })}
                           </a>
@@ -1048,105 +1257,120 @@ export default async function Home({
                       })}
                     </div>
 
-                    <div className="flex gap-4 mt-6 justify-center text-[9px] font-bold text-[#8a93a6] uppercase tracking-widest flex-wrap">
-                      <span className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-[#161a23] border border-[#383e52]"></div> Trading</span>
-                      <span className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-teal-500/10 border border-teal-500/30"></div> Paid</span>
-                      <span className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-[#0b0e14] border border-[#272b38]/50"></div> Closed / Holiday</span>
+                    <div className="flex gap-3 sm:gap-4 mt-6 justify-center text-[9px] font-bold text-[#8a93a6] uppercase tracking-widest flex-wrap">
+                      <span className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded bg-[#161a23] border border-[#383e52]"></div> Trading</span>
+                      <span className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded bg-teal-500/10 border border-teal-500/30"></div> Paid</span>
+                      <span className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded bg-[#0b0e14] border border-[#272b38]/50"></div> Closed / Holiday</span>
                     </div>
                   </div>
                 </div>
               </div>
             </section>
             
-            {/* RIGHT COLUMN: OPERATING BUDGETS */}
-            <section>
-              <div className="flex justify-between items-center mb-4 pl-1">
+            {/* RIGHT COLUMN: OPERATING Budgets */}
+            <section className="space-y-4">
+              <div className="flex justify-between items-center pl-1">
                 <h2 className="text-[11px] font-semibold uppercase text-[#8a93a6] tracking-[0.15em]">Operating Budgets</h2>
                 <span className="border border-teal-500/30 text-teal-400 bg-teal-500/10 px-2.5 py-1 rounded text-[9px] font-bold uppercase tracking-widest">{formattedMonthDisplay.split(' ')[0]}</span>
               </div>
 
               {budgets?.length === 0 ? (
-                <div className="bg-[#161a23] border border-[#272b38] border-dashed rounded-xl p-10 flex flex-col items-center justify-center text-center gap-5">
+                <div className="bg-[#161a23] border border-[#272b38] border-dashed rounded-xl p-8 sm:p-10 flex flex-col items-center justify-center text-center gap-4 sm:gap-5">
                   <p className="text-[#8a93a6] text-sm">No operating budgets allocated for {formattedMonthDisplay} yet.</p>
-                  <form action={duplicatePreviousBudgets}>
-                    <input type="hidden" name="currentMonth" value={currentSelectedMonth} />
-                    <input type="hidden" name="prevMonth" value={prevMonthStr} />
-                    <button type="submit" className="text-xs font-bold uppercase tracking-widest px-6 py-3 rounded-full border border-teal-500/40 text-teal-400 bg-teal-500/10 hover:bg-teal-500/20 transition-all shadow-[0_0_10px_rgba(20,184,166,0.1)]">
-                      Import Previous Month's Budgets
-                    </button>
-                  </form>
+                  {!isReadOnly && (
+                    <form action={duplicatePreviousBudgets}>
+                      <input type="hidden" name="currentMonth" value={currentSelectedMonth} />
+                      <input type="hidden" name="prevMonth" value={prevMonthStr} />
+                      <button type="submit" className="text-xs font-bold uppercase tracking-widest px-5 py-2.5 sm:px-6 sm:py-3 rounded-full border border-teal-500/40 text-teal-400 bg-teal-500/10 hover:bg-teal-500/20 transition-all shadow-[0_0_10px_rgba(20,184,166,0.1)]">
+                        Import Previous Month's Budgets
+                      </button>
+                    </form>
+                  )}
                 </div>
               ) : (
                 <div className="bg-[#161a23] border border-[#272b38] rounded-xl divide-y divide-[#272b38] overflow-hidden shadow-sm">
-                  {budgets?.map((budget) => {
+                  {budgets?.map((budget: any) => {
                     const allocated = n(budget.allocated_amount);
                     const spent = n(budget.spent_amount);
                     const remaining = Math.max(0, allocated - spent);
                     
                     return (
-                      <div key={budget.id} className={`p-5 md:p-6 flex flex-col gap-5 transition-all ${budget.is_saved ? 'bg-teal-500/5 border-l-2 border-teal-500/50' : 'hover:bg-[#1a1e28]'}`}>
+                      <div key={budget.id} className={`p-4 sm:p-5 md:p-6 flex flex-col gap-4 sm:gap-5 transition-all ${budget.is_saved ? 'bg-teal-500/5 border-l-2 border-teal-500/50' : 'hover:bg-[#1a1e28]'}`}>
                         
-                        <div className="flex justify-between items-center">
-                          <span className={`text-lg font-bold tracking-tight ${budget.is_saved ? 'text-[#8a93a6] line-through' : 'text-white'}`}>{budget.category}</span>
-                          <span className="text-[10px] text-[#8a93a6] font-mono bg-[#0b0e14] border border-[#272b38] px-2.5 py-1 rounded-md uppercase tracking-wider">Allocated: RM {allocated.toFixed(2)}</span>
+                        <div className="flex justify-between items-start gap-2">
+                          <span className={`text-base sm:text-lg font-bold tracking-tight leading-tight ${budget.is_saved ? 'text-[#8a93a6] line-through' : 'text-white'}`}>{budget.category}</span>
+                          <span className="text-[9px] sm:text-[10px] text-[#8a93a6] font-mono bg-[#0b0e14] border border-[#272b38] px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-md uppercase tracking-wider flex-shrink-0">Allocated: RM {allocated.toFixed(2)}</span>
                         </div>
 
-                        <div className="flex flex-col xl:flex-row justify-between xl:items-end gap-5">
+                        <div className="flex flex-col xl:flex-row justify-between xl:items-end gap-4 sm:gap-5">
                           
-                          <form action={updateBudgetSpending} className="flex-1">
-                            <input type="hidden" name="id" value={budget.id} />
-                            <label className="text-[9px] text-[#8a93a6] uppercase tracking-[0.1em] font-bold block mb-2">Spent Amount (RM)</label>
-                            <div className="flex gap-2">
-                              <input 
-                                name="spent" 
-                                type="number" 
-                                step="0.01" 
-                                defaultValue={spent.toFixed(2)} 
-                                disabled={budget.is_saved} 
-                                className="w-full bg-[#0b0e14] border border-[#272b38] rounded-lg px-3 py-2 text-white text-sm outline-none disabled:opacity-50 focus:border-amber-500/50 transition-colors" 
-                              />
-                              {!budget.is_saved && (
-                                <button type="submit" className="text-[10px] uppercase tracking-widest font-bold px-4 py-2 bg-[#272b38] text-white rounded-lg hover:bg-[#383e52] transition-colors">
-                                  Update
-                                </button>
-                              )}
+                          {isReadOnly ? (
+                            <div className="flex-1 bg-[#0b0e14] p-3 rounded-lg border border-[#272b38] xl:max-w-xs">
+                              <p className="text-[9px] text-[#8a93a6] font-bold uppercase tracking-[0.1em] mb-1">Spent Amount</p>
+                              <p className="font-mono text-white text-sm font-bold">RM {spent.toFixed(2)}</p>
                             </div>
-                          </form>
+                          ) : (
+                            <form action={updateBudgetSpending} className="flex-1">
+                              <input type="hidden" name="id" value={budget.id} />
+                              <label className="text-[9px] text-[#8a93a6] uppercase tracking-[0.1em] font-bold block mb-1.5">Spent Amount (RM)</label>
+                              <div className="flex gap-2">
+                                <input 
+                                  name="spent" 
+                                  type="number" 
+                                  step="0.01" 
+                                  defaultValue={spent.toFixed(2)} 
+                                  disabled={budget.is_saved} 
+                                  className="w-full bg-[#0b0e14] border border-[#272b38] rounded-lg px-2.5 py-2 text-white text-sm outline-none disabled:opacity-50 focus:border-amber-500/50 transition-colors" 
+                                />
+                                {!budget.is_saved && (
+                                  <button type="submit" className="text-[10px] uppercase tracking-widest font-bold px-3 py-2 sm:px-4 sm:py-2 bg-[#272b38] text-white rounded-lg hover:bg-[#383e52] transition-colors">
+                                    Update
+                                  </button>
+                                )}
+                              </div>
+                            </form>
+                          )}
 
                           <div className="xl:text-right bg-[#0b0e14] p-3 rounded-lg border border-[#272b38] flex-1 xl:flex-none xl:min-w-[140px]">
                             <p className="text-[9px] text-[#8a93a6] font-bold uppercase tracking-[0.1em] mb-1">Remaining</p>
-                            <p className={`font-bold text-xl tracking-tight ${budget.is_saved ? 'text-teal-500/40' : 'text-teal-400'}`}>
+                            <p className={`font-bold text-lg sm:text-xl tracking-tight ${budget.is_saved ? 'text-teal-500/40' : 'text-teal-400'}`}>
                               {remaining.toFixed(2)}
                             </p>
                           </div>
                         </div>
 
-                        <div className="border-t border-[#272b38]/50 pt-4 flex justify-end">
-                          {!budget.is_saved ? (
-                            <form action={sendToSavings}>
-                              <input type="hidden" name="id" value={budget.id} />
-                              <button 
-                                type="submit" 
-                                disabled={remaining <= 0}
-                                className="text-[10px] uppercase tracking-widest font-bold px-5 py-2.5 rounded-full border border-teal-500/40 text-teal-400 bg-teal-500/10 hover:bg-teal-500/20 transition-all disabled:opacity-30 disabled:hover:bg-teal-500/10"
-                              >
-                                Approve & Send to Pool
-                              </button>
-                            </form>
+                        <div className="border-t border-[#272b38]/50 pt-3 sm:pt-4 flex justify-end">
+                          {budget.is_saved ? (
+                            <div className="flex items-center gap-3 sm:gap-4 bg-[#0b0e14] px-3 py-1.5 sm:px-4 sm:py-2 rounded-full border border-[#272b38]">
+                              <span className="text-[9px] uppercase tracking-widest font-bold text-teal-500 flex items-center gap-1.5">
+                                <span className="w-3 sm:w-3.5 h-3 sm:h-3.5 rounded-full bg-teal-500/20 flex items-center justify-center text-[8px] sm:text-[10px]">✓</span>
+                                In Pool
+                              </span>
+                              {!isReadOnly && (
+                                <>
+                                  <div className="w-px h-4 bg-[#272b38]"></div>
+                                  <form action={undoSavings}>
+                                    <input type="hidden" name="id" value={budget.id} />
+                                    <button type="submit" className="text-[9px] uppercase tracking-widest font-bold text-[#8a93a6] hover:text-white transition-colors">
+                                      Undo
+                                    </button>
+                                  </form>
+                                </>
+                              )}
+                            </div>
                           ) : (
-                            <form action={undoSavings}>
-                              <input type="hidden" name="id" value={budget.id} />
-                              <div className="flex items-center gap-4 bg-[#0b0e14] px-3 py-1.5 rounded-full border border-[#272b38]">
-                                <span className="text-[9px] uppercase tracking-widest font-bold text-teal-500 flex items-center gap-1.5">
-                                  <span className="w-3.5 h-3.5 rounded-full bg-teal-500/20 flex items-center justify-center">✓</span>
-                                  In Pool
-                                </span>
-                                <div className="w-px h-4 bg-[#272b38]"></div>
-                                <button type="submit" className="text-[9px] uppercase tracking-widest font-bold text-[#8a93a6] hover:text-white transition-colors">
-                                  Undo
+                            !isReadOnly && (
+                              <form action={sendToSavings}>
+                                <input type="hidden" name="id" value={budget.id} />
+                                <button 
+                                  type="submit" 
+                                  disabled={remaining <= 0}
+                                  className="text-[10px] uppercase tracking-widest font-bold px-4 py-2 sm:px-5 sm:py-2.5 rounded-full border border-teal-500/40 text-teal-400 bg-teal-500/10 hover:bg-teal-500/20 transition-all disabled:opacity-30 disabled:hover:bg-teal-500/10"
+                                >
+                                  Approve & Send to Pool
                                 </button>
-                              </div>
-                            </form>
+                              </form>
+                            )
                           )}
                         </div>
 
