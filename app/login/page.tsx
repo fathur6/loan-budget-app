@@ -57,7 +57,7 @@ export default async function LoginPage({
             </svg>
           </div>
           <h1 className="text-2xl font-black text-white tracking-widest uppercase">
-            FINA <span className="text-amber-400">PULSE</span>
+            Finance <span className="text-amber-400">PULSE</span>
           </h1>
           <p className="text-[10px] text-[#8a93a6] tracking-[0.2em] mt-2 uppercase font-bold">Encrypted Access</p>
         </div>

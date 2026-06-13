@@ -398,7 +398,7 @@ export default async function Home({
             </div>
             <div>
               <h1 className="text-xl md:text-2xl font-black text-white tracking-widest uppercase">
-                FINA <span className="text-amber-400">PULSE</span>
+                Finance <span className="text-amber-400">PULSE</span>
               </h1>
             </div>
           </div>
