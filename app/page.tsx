@@ -1234,11 +1234,13 @@ export default async function Home(props: any = {}) {
                               </span>
                             )}
                           </div>
-                          <div className="text-[10px] sm:text-[11px] text-[#8a93a6] font-medium space-y-0.5 sm:space-y-1">
-                            <p>Base: RM {n(debt.monthly_due).toFixed(2)}</p>
-                            {currentArrears > 0 && <p className="text-rose-400">Arrears: +RM {currentArrears.toFixed(2)}</p>}
-                            {n(debt.float_balance) > 0 && <p className="text-teal-400">Credit: -RM {n(debt.float_balance).toFixed(2)}</p>}
-                          </div>
+                          {!debtIsPaidThisMonth && (
+                            <div className="text-[10px] sm:text-[11px] text-[#8a93a6] font-medium space-y-0.5 sm:space-y-1">
+                              <p>Base: RM {n(debt.monthly_due).toFixed(2)}</p>
+                              {currentArrears > 0 && <p className="text-rose-400">Arrears: +RM {currentArrears.toFixed(2)}</p>}
+                              {n(debt.float_balance) > 0 && <p className="text-teal-400">Credit: -RM {n(debt.float_balance).toFixed(2)}</p>}
+                            </div>
+                          )}
                           <a href={`?month=${currentSelectedMonth}${isExpanded ? '' : `&details=${debt.id}`}${isEditing ? '&edit=true' : ''}`} className="text-[9px] sm:text-[10px] text-teal-400 hover:text-teal-300 mt-2 inline-block transition-colors uppercase tracking-widest font-bold">{isExpanded ? 'Hide ▲' : 'Details ▼'}</a>
                         </div>
 
@@ -1577,13 +1579,25 @@ export default async function Home(props: any = {}) {
                     const allocated = n(budget.allocated_amount);
                     const spent = n(budget.spent_amount);
                     const remaining = Math.max(0, allocated - spent);
+                    const remainingPct = allocated > 0 ? Math.max(0, Math.min(100, (remaining / allocated) * 100)) : 0;
                     const logs = budgetTransactions.filter((t: any) => t.budget_id === budget.id);
 
                     return (
                       <div key={budget.id} className={`p-4 sm:p-5 md:p-6 flex flex-col gap-4 sm:gap-5 transition-all ${budget.is_saved ? 'bg-teal-500/5 border-l-2 border-teal-500/50' : 'hover:bg-[#1a1e28]'}`}>
-                        <div className="flex justify-between items-start gap-2">
-                          <span className={`text-base sm:text-lg font-bold tracking-tight leading-tight ${budget.is_saved ? 'text-[#8a93a6] line-through' : 'text-white'}`}>{budget.category}</span>
-                          <span className="text-[9px] sm:text-[10px] text-[#8a93a6] font-mono bg-[#0b0e14] border border-[#272b38] px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-md uppercase tracking-wider flex-shrink-0">Allocated: RM {allocated.toFixed(2)}</span>
+                        
+                        <div>
+                          <div className="flex justify-between items-start gap-2">
+                            <span className={`text-base sm:text-lg font-bold tracking-tight leading-tight ${budget.is_saved ? 'text-[#8a93a6] line-through' : 'text-white'}`}>{budget.category}</span>
+                            <span className="text-[9px] sm:text-[10px] text-[#8a93a6] font-mono bg-[#0b0e14] border border-[#272b38] px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-md uppercase tracking-wider flex-shrink-0">Allocated: RM {allocated.toFixed(2)}</span>
+                          </div>
+                          
+                          {/* Minimalist Border Progress Bar */}
+                          <div className="w-full h-px bg-[#272b38] mt-3 sm:mt-4">
+                            <div 
+                              className={`h-full transition-all duration-1000 ease-out ${budget.is_saved ? 'bg-teal-500/20' : (remainingPct <= 20 ? 'bg-rose-500/80 shadow-[0_0_8px_rgba(244,63,94,0.4)]' : 'bg-teal-500/60 shadow-[0_0_8px_rgba(45,212,191,0.3)]')}`} 
+                              style={{ width: `${remainingPct}%` }}
+                            />
+                          </div>
                         </div>
 
                         <div className="flex flex-col xl:flex-row justify-between xl:items-end gap-4 sm:gap-5">
@@ -1613,7 +1627,7 @@ export default async function Home(props: any = {}) {
 
                           <div className="xl:text-right bg-[#0b0e14] p-3 rounded-lg border border-[#272b38] flex-1 xl:flex-none xl:min-w-[140px]">
                             <p className="text-[9px] text-[#8a93a6] font-bold uppercase tracking-[0.1em] mb-1">Remaining</p>
-                            <p className={`font-bold text-lg sm:text-xl tracking-tight ${budget.is_saved ? 'text-teal-400/40' : 'text-teal-400'}`}>RM {remaining.toFixed(2)}</p>
+                            <p className={`font-bold text-lg sm:text-xl tracking-tight ${budget.is_saved ? 'text-teal-400/40' : (remainingPct <= 20 ? 'text-rose-400' : 'text-teal-400')}`}>RM {remaining.toFixed(2)}</p>
                           </div>
                         </div>
 
