@@ -1008,13 +1008,24 @@ export default async function Home(props: any = {}) {
             <div className="bg-[#161a23] border border-[#272b38] rounded-2xl p-5 sm:p-6 md:p-8 flex flex-col justify-between group hover:border-[#383e52] transition-colors">
               <div>
                 <p className="text-[10px] sm:text-[11px] text-[#8a93a6] font-semibold uppercase tracking-[0.15em] mb-2">Net Cash Required</p>
-                <p className="text-2xl sm:text-3xl md:text-4xl font-bold text-white tracking-tight">
-                  RM {totalRemainingBalance.toLocaleString('en-MY', { minimumFractionDigits: 2 })}
-                </p>
-                <a href={`?month=${currentSelectedMonth}&log=true${isEditing ? '&edit=true' : ''}`} className="mt-3 inline-flex items-center gap-1.5 text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-teal-400 bg-teal-500/10 border border-teal-500/30 px-3 sm:px-4 py-2 rounded-lg hover:bg-teal-500/20 transition-colors shadow-[0_0_10px_rgba(20,184,166,0.1)]">
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                  Transaction Log
-                </a>
+                <div className="flex justify-between items-center mb-3">
+                  <p className="text-2xl sm:text-3xl md:text-4xl font-bold text-white tracking-tight">
+                    RM {totalRemainingBalance.toLocaleString('en-MY', { minimumFractionDigits: 2 })}
+                  </p>
+                  <a href={`?month=${currentSelectedMonth}&log=true${isEditing ? '&edit=true' : ''}`} className="flex-shrink-0 flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 text-teal-400 bg-teal-500/10 border border-teal-500/30 rounded-lg hover:bg-teal-500/20 transition-colors shadow-[0_0_10px_rgba(20,184,166,0.1)]" title="Transaction Log">
+                    <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                  </a>
+                </div>
+                <div className="space-y-1.5 text-[#8a93a6] text-[9px] sm:text-[10px] border-t border-[#272b38]/50 pt-3 mt-3">
+                  <div className="flex items-center gap-2">
+                    <span className="uppercase tracking-widest font-bold w-14">Budget:</span> 
+                    <span className="font-mono text-white">RM {totalBudgetsAllocatedThisMonth.toLocaleString('en-MY', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="uppercase tracking-widest font-bold w-14">Loan:</span> 
+                    <span className="font-mono text-white">RM {baseMonthlyLoanTotal.toLocaleString('en-MY', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                </div>
               </div>
               <div className="mt-6 sm:mt-8">
                 <div className="w-full h-2 bg-[#272b38] rounded-full">
