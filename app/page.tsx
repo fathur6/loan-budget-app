@@ -93,6 +93,30 @@ async function addDebt(formData: FormData) {
   revalidatePath('/')
 }
 
+async function removeDebt(formData: FormData) {
+  'use server'
+  const supabasePath = "./supabase"
+  const cachePath = "next/cache"
+  const { supabase } = await import(supabasePath)
+  const { revalidatePath } = await import(cachePath)
+
+  const id = formData.get('id') as string
+  await supabase.from('debts').delete().eq('id', id)
+  revalidatePath('/')
+}
+
+async function removeBudget(formData: FormData) {
+  'use server'
+  const supabasePath = "./supabase"
+  const cachePath = "next/cache"
+  const { supabase } = await import(supabasePath)
+  const { revalidatePath } = await import(cachePath)
+
+  const id = formData.get('id') as string
+  await supabase.from('budgets').delete().eq('id', id)
+  revalidatePath('/')
+}
+
 // --- Dynamic Budget Transaction & Virement Sub-Actions ---
 async function executeBudgetAction(formData: FormData) {
   'use server'
@@ -879,7 +903,7 @@ export default async function Home(props: any = {}) {
               {isEditing ? (
                 <><span className="text-base leading-none">&times;</span> CLOSE SYNC</>
               ) : (
-                <><span className="text-base leading-none">&#9881;</span> ADJUST DATA</>
+                <><span className="text-base leading-none">&#9881;</span> CUSTOMIZE</>
               )}
             </a>
           )}
@@ -1030,7 +1054,14 @@ export default async function Home(props: any = {}) {
                   {debts?.map((debt: any) => (
                     <form key={debt.id} action={updateDebtBalances} className="p-4 sm:p-5 bg-[#0b0e14] rounded-xl border border-[#272b38] space-y-4 shadow-sm hover:border-[#383e52] transition-colors">
                       <input type="hidden" name="id" value={debt.id} />
-                      <input type="text" name="creditor" defaultValue={debt.creditor} className="w-full bg-transparent font-bold text-white text-sm outline-none border-b border-transparent focus:border-amber-500/50 pb-1 transition-colors" placeholder="Liability Name" />
+                      <div className="flex items-center gap-2">
+                        <input type="text" name="creditor" defaultValue={debt.creditor} className="w-full bg-transparent font-bold text-white text-sm outline-none border-b border-transparent focus:border-amber-500/50 pb-1 transition-colors" placeholder="Liability Name" />
+                        <button formAction={removeDebt} type="submit" className="text-[#8a93a6] hover:text-rose-400 hover:bg-rose-500/10 p-1.5 rounded transition-colors" title="Delete Liability">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
                       <div className="grid grid-cols-2 gap-3 sm:gap-4">
                         <div className="col-span-2">
                           <label className="text-[9px] text-[#8a93a6] block mb-1.5 uppercase tracking-widest font-bold">Outstanding Principal (RM)</label>
@@ -1222,7 +1253,14 @@ export default async function Home(props: any = {}) {
                   {budgets?.map((budget: any) => (
                     <form key={budget.id} action={updateBudgetSettings} className="p-4 sm:p-5 bg-[#0b0e14] rounded-xl border border-[#272b38] space-y-4 shadow-sm hover:border-[#383e52] transition-colors">
                       <input type="hidden" name="id" value={budget.id} />
-                      <input type="text" name="category" defaultValue={budget.category} className="w-full bg-transparent font-bold text-white text-sm outline-none border-b border-transparent focus:border-teal-500/50 pb-1 transition-colors" placeholder="Budget Category Name" />
+                      <div className="flex items-center gap-2">
+                        <input type="text" name="category" defaultValue={budget.category} className="w-full bg-transparent font-bold text-white text-sm outline-none border-b border-transparent focus:border-teal-500/50 pb-1 transition-colors" placeholder="Budget Category Name" />
+                        <button formAction={removeBudget} type="submit" className="text-[#8a93a6] hover:text-rose-400 hover:bg-rose-500/10 p-1.5 rounded transition-colors" title="Delete Budget">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
                       <div>
                         <label className="text-[9px] text-[#8a93a6] block mb-1.5 uppercase tracking-widest font-bold">Allocated (RM)</label>
                         <input name="allocated" type="number" step="0.01" defaultValue={n(budget.allocated_amount).toFixed(2)} className="w-full bg-[#161a23] border border-[#272b38] rounded-lg px-2.5 py-2 text-white text-xs outline-none focus:border-teal-500/50 transition-colors" />
