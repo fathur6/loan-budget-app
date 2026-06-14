@@ -327,6 +327,28 @@ async function addBsklContract(formData: FormData) {
   revalidatePath('/')
 }
 
+async function updateBsklContract(formData: FormData) {
+  'use server'
+  const supabasePath = "./supabase"
+  const cachePath = "next/cache"
+  const { supabase } = await import(supabasePath)
+  const { revalidatePath } = await import(cachePath)
+
+  const id = formData.get('id') as string
+  const name = formData.get('name') as string
+  const capital = Number(formData.get('capital') ?? 0)
+  const rate = Number(formData.get('rate') ?? 0)
+  const effectiveDate = formData.get('effectiveDate') as string
+
+  await supabase.from('bskl_contracts').update({
+    name,
+    capital_injection: capital,
+    daily_rate: rate,
+    effective_date: effectiveDate
+  }).eq('id', id)
+  revalidatePath('/')
+}
+
 async function endBsklContract(formData: FormData) {
   'use server'
   const supabasePath = "./supabase"
@@ -1058,70 +1080,139 @@ export default async function Home(props: any = {}) {
                 </div>
               </div>
 
-              {/* BSKL CONTRACTS UTILITY */}
-              <div className="bg-[#161a23] border border-blue-500/30 rounded-2xl p-4 sm:p-6 md:p-8 space-y-6">
-                <h3 className="text-xs font-bold uppercase text-blue-400 tracking-[0.15em]">BSKL Trade Utility</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6">
-                  {bsklContracts.map((c: any) => (
-                    <div key={c.id} className="p-4 sm:p-5 bg-[#0b0e14] rounded-xl border border-[#272b38] space-y-4 shadow-sm hover:border-[#383e52] transition-colors flex flex-col justify-between">
-                      <div>
-                        <div className="flex justify-between items-center border-b border-[#272b38] pb-2 mb-3">
-                          <p className="font-bold text-white text-sm">{c.name}</p>
+              {/* BSKL UNIFIED MANAGEMENT UTILITY */}
+              <div className="bg-[#161a23] border border-[#272b38] rounded-2xl p-4 sm:p-6 md:p-8 space-y-8">
+                
+                {/* 1. CONTRACTS */}
+                <div className="space-y-4 sm:space-y-6">
+                  <h3 className="text-xs font-bold uppercase text-blue-400 tracking-[0.15em] flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span> BSKL Trade Utility
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6">
+                    {bsklContracts.map((c: any) => (
+                      <form key={c.id} className="p-4 sm:p-5 bg-[#0b0e14] rounded-xl border border-[#272b38] space-y-4 shadow-sm hover:border-[#383e52] transition-colors flex flex-col justify-between">
+                        <input type="hidden" name="id" value={c.id} />
+                        <div>
+                          <div className="flex justify-between items-center border-b border-[#272b38] pb-2 mb-3 gap-2">
+                            {c.is_active ? (
+                              <input name="name" defaultValue={c.name} required className="w-full bg-transparent font-bold text-white text-sm outline-none border-b border-transparent focus:border-blue-500/50 pb-0.5 transition-colors" />
+                            ) : (
+                              <p className="font-bold text-white text-sm">{c.name}</p>
+                            )}
+                            {c.is_active ? (
+                              <span className="text-[8px] bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded uppercase tracking-widest border border-emerald-500/30 flex-shrink-0">Active</span>
+                            ) : (
+                              <span className="text-[8px] bg-rose-500/10 text-rose-400 px-2 py-0.5 rounded uppercase tracking-widest border border-rose-500/30 flex-shrink-0">Ended</span>
+                            )}
+                          </div>
+                          
                           {c.is_active ? (
-                            <span className="text-[8px] bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded uppercase tracking-widest border border-emerald-500/30">Active</span>
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <label className="text-[9px] text-[#8a93a6] uppercase tracking-widest font-bold">Capital</label>
+                                <input name="capital" type="number" step="0.01" required defaultValue={n(c.capital_injection).toFixed(2)} className="w-full bg-[#161a23] border border-[#272b38] rounded px-2 py-1 text-white text-xs mt-1 outline-none focus:border-blue-500/50" />
+                              </div>
+                              <div>
+                                <label className="text-[9px] text-[#8a93a6] uppercase tracking-widest font-bold">Eff. Date</label>
+                                <input name="effectiveDate" type="date" required defaultValue={c.effective_date} className="w-full bg-[#161a23] border border-[#272b38] rounded px-2 py-1 text-white text-xs mt-1 outline-none focus:border-blue-500/50" />
+                              </div>
+                              <div>
+                                <label className="text-[9px] text-[#8a93a6] uppercase tracking-widest font-bold">Rate / Day</label>
+                                <input name="rate" type="number" step="0.01" required defaultValue={n(c.daily_rate).toFixed(2)} className="w-full bg-[#161a23] border border-[#272b38] rounded px-2 py-1 text-teal-400 font-mono text-xs mt-1 outline-none focus:border-blue-500/50" />
+                              </div>
+                            </div>
                           ) : (
-                            <span className="text-[8px] bg-rose-500/10 text-rose-400 px-2 py-0.5 rounded uppercase tracking-widest border border-rose-500/30">Ended</span>
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <p className="text-[9px] text-[#8a93a6] uppercase tracking-widest font-bold">Capital</p>
+                                <p className="text-xs text-white mt-1 font-mono">{n(c.capital_injection).toFixed(2)}</p>
+                              </div>
+                              <div>
+                                <p className="text-[9px] text-[#8a93a6] uppercase tracking-widest font-bold">Eff. Date</p>
+                                <p className="text-xs text-white mt-1 font-mono">{c.effective_date}</p>
+                              </div>
+                              <div>
+                                <p className="text-[9px] text-[#8a93a6] uppercase tracking-widest font-bold">Rate / Day</p>
+                                <p className="text-xs text-teal-400 mt-1 font-mono">{n(c.daily_rate).toFixed(2)}</p>
+                              </div>
+                            </div>
                           )}
                         </div>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <p className="text-[9px] text-[#8a93a6] uppercase tracking-widest font-bold">Capital</p>
-                            <p className="text-xs text-white mt-1 font-mono">{n(c.capital_injection).toFixed(2)}</p>
+                        
+                        {c.is_active && (
+                          <div className="flex gap-2 mt-2 pt-2 border-t border-[#272b38]">
+                            <button formAction={updateBsklContract} className="flex-1 bg-blue-500/10 text-blue-400 border border-blue-500/30 hover:bg-blue-500/20 font-bold py-2 rounded-lg transition-colors text-[10px] uppercase tracking-widest">Edit / Save</button>
+                            <button formAction={endBsklContract} className="flex-1 bg-[#161a23] text-rose-400 border border-[#383e52] hover:bg-rose-500/10 hover:border-rose-500/40 font-bold py-2 rounded-lg transition-colors text-[10px] uppercase tracking-widest">End</button>
                           </div>
-                          <div>
-                            <p className="text-[9px] text-[#8a93a6] uppercase tracking-widest font-bold">Eff. Date</p>
-                            <p className="text-xs text-white mt-1 font-mono">{c.effective_date}</p>
-                          </div>
-                          <div>
-                            <p className="text-[9px] text-[#8a93a6] uppercase tracking-widest font-bold">Rate / Day</p>
-                            <p className="text-xs text-teal-400 mt-1 font-mono">{n(c.daily_rate).toFixed(2)}</p>
-                          </div>
-                        </div>
-                      </div>
-                      {c.is_active && (
-                        <form action={endBsklContract}>
-                          <input type="hidden" name="id" value={c.id} />
-                          <button type="submit" className="w-full bg-[#161a23] text-rose-400 border border-[#383e52] hover:bg-rose-500/10 hover:border-rose-500/40 font-bold py-2.5 rounded-lg transition-colors text-[10px] uppercase tracking-widest mt-2">End Contract</button>
-                        </form>
-                      )}
-                    </div>
-                  ))}
+                        )}
+                      </form>
+                    ))}
 
-                  <form action={addBsklContract} className="p-4 sm:p-5 bg-[#161a23] rounded-xl border border-dashed border-[#383e52] space-y-4 shadow-sm hover:border-blue-500/50 transition-colors flex flex-col justify-center">
-                    <p className="font-bold text-blue-400 text-sm border-b border-blue-500/20 pb-1">+ New Injection</p>
-                    <div className="space-y-3 sm:space-y-4">
-                      <div>
-                         <label className="text-[9px] text-[#8a93a6] block mb-1.5 uppercase tracking-widest font-bold">Contract Name</label>
-                         <input name="name" type="text" required className="w-full bg-[#0b0e14] border border-[#272b38] rounded-lg px-2.5 py-2 text-white text-xs outline-none focus:border-blue-500/50 transition-colors" placeholder="e.g. Batch 2" />
-                      </div>
-                      <div className="grid grid-cols-2 gap-3 sm:gap-4">
-                        <div className="col-span-2">
-                          <label className="text-[9px] text-[#8a93a6] block mb-1.5 uppercase tracking-widest font-bold">Capital (RM)</label>
-                          <input name="capital" type="number" step="0.01" required className="w-full bg-[#0b0e14] border border-[#272b38] rounded-lg px-2.5 py-2 text-white text-xs outline-none focus:border-blue-500/50 transition-colors" />
-                        </div>
+                    <form action={addBsklContract} className="p-4 sm:p-5 bg-[#161a23] rounded-xl border border-dashed border-[#383e52] space-y-4 shadow-sm hover:border-blue-500/50 transition-colors flex flex-col justify-center">
+                      <p className="font-bold text-blue-400 text-sm border-b border-blue-500/20 pb-1">+ New Injection</p>
+                      <div className="space-y-3 sm:space-y-4">
                         <div>
-                          <label className="text-[9px] text-[#8a93a6] block mb-1.5 uppercase tracking-widest font-bold">Rate / Day</label>
-                          <input name="rate" type="number" step="0.01" required className="w-full bg-[#0b0e14] border border-[#272b38] rounded-lg px-2.5 py-2 text-white text-xs outline-none focus:border-blue-500/50 transition-colors" />
+                           <label className="text-[9px] text-[#8a93a6] block mb-1.5 uppercase tracking-widest font-bold">Contract Name</label>
+                           <input name="name" type="text" required className="w-full bg-[#0b0e14] border border-[#272b38] rounded-lg px-2.5 py-2 text-white text-xs outline-none focus:border-blue-500/50 transition-colors" placeholder="e.g. Batch 2" />
                         </div>
-                        <div>
-                          <label className="text-[9px] text-[#8a93a6] block mb-1.5 uppercase tracking-widest font-bold">Eff. Date</label>
-                          <input name="effectiveDate" type="date" required className="w-full bg-[#0b0e14] border border-[#272b38] rounded-lg px-2.5 py-2 text-white text-xs outline-none focus:border-blue-500/50 transition-colors" />
+                        <div className="grid grid-cols-2 gap-3 sm:gap-4">
+                          <div className="col-span-2">
+                            <label className="text-[9px] text-[#8a93a6] block mb-1.5 uppercase tracking-widest font-bold">Capital (RM)</label>
+                            <input name="capital" type="number" step="0.01" required className="w-full bg-[#0b0e14] border border-[#272b38] rounded-lg px-2.5 py-2 text-white text-xs outline-none focus:border-blue-500/50 transition-colors" />
+                          </div>
+                          <div>
+                            <label className="text-[9px] text-[#8a93a6] block mb-1.5 uppercase tracking-widest font-bold">Rate / Day</label>
+                            <input name="rate" type="number" step="0.01" required className="w-full bg-[#0b0e14] border border-[#272b38] rounded-lg px-2.5 py-2 text-white text-xs outline-none focus:border-blue-500/50 transition-colors" />
+                          </div>
+                          <div>
+                            <label className="text-[9px] text-[#8a93a6] block mb-1.5 uppercase tracking-widest font-bold">Eff. Date</label>
+                            <input name="effectiveDate" type="date" required className="w-full bg-[#0b0e14] border border-[#272b38] rounded-lg px-2.5 py-2 text-white text-xs outline-none focus:border-blue-500/50 transition-colors" />
+                          </div>
                         </div>
                       </div>
-                    </div>
-                    <button type="submit" className="w-full bg-blue-500/10 text-blue-400 border border-blue-500/30 hover:bg-blue-500/20 font-bold py-2.5 rounded-lg transition-colors text-[10px] uppercase tracking-widest mt-2">+ Add Contract</button>
-                  </form>
+                      <button type="submit" className="w-full bg-blue-500/10 text-blue-400 border border-blue-500/30 hover:bg-blue-500/20 font-bold py-2.5 rounded-lg transition-colors text-[10px] uppercase tracking-widest mt-2">+ Add Contract</button>
+                    </form>
+                  </div>
                 </div>
+
+                <div className="w-full h-px bg-[#272b38]"></div>
+
+                {/* 2. HOLIDAYS */}
+                <div className="space-y-4 sm:space-y-6">
+                  <h3 className="text-xs font-bold uppercase text-emerald-400 tracking-[0.15em] flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> BSKL Holidays Utility
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6">
+                    {bsklHolidays.map((h: any) => (
+                      <div key={h.id} className="p-4 bg-[#0b0e14] rounded-xl border border-[#272b38] flex justify-between items-center shadow-sm">
+                        <div>
+                          <p className="font-bold text-white text-sm">{h.description || 'Holiday'}</p>
+                          <p className="text-[10px] text-[#8a93a6] font-mono mt-1">{h.holiday_date}</p>
+                        </div>
+                        <form action={removeBsklHoliday}>
+                          <input type="hidden" name="id" value={h.id} />
+                          <button type="submit" className="text-rose-400 hover:text-rose-300 text-lg leading-none p-1">&times;</button>
+                        </form>
+                      </div>
+                    ))}
+
+                    <form action={addBsklHoliday} className="p-4 bg-[#161a23] rounded-xl border border-dashed border-[#383e52] shadow-sm hover:border-emerald-500/50 transition-colors flex flex-col justify-center">
+                      <p className="font-bold text-emerald-400 text-sm border-b border-emerald-500/20 pb-1 mb-3">+ Add Holiday</p>
+                      <div className="space-y-3">
+                        <div>
+                          <label className="text-[9px] text-[#8a93a6] block mb-1 uppercase tracking-widest font-bold">Date</label>
+                          <input name="date" type="date" required className="w-full bg-[#0b0e14] border border-[#272b38] rounded-lg px-2.5 py-2 text-white text-xs outline-none focus:border-emerald-500/50 transition-colors" />
+                        </div>
+                        <div>
+                          <label className="text-[9px] text-[#8a93a6] block mb-1 uppercase tracking-widest font-bold">Description</label>
+                          <input name="description" type="text" className="w-full bg-[#0b0e14] border border-[#272b38] rounded-lg px-2.5 py-2 text-white text-xs outline-none focus:border-emerald-500/50 transition-colors" placeholder="e.g. Hari Raya" />
+                        </div>
+                      </div>
+                      <button type="submit" className="w-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20 font-bold py-2.5 rounded-lg transition-colors text-[10px] uppercase tracking-widest mt-3">+ Add</button>
+                    </form>
+                  </div>
+                </div>
+
               </div>
 
               {/* BUDGET SYNC UTILITY */}
@@ -1154,40 +1245,6 @@ export default async function Home(props: any = {}) {
                       </div>
                     </div>
                     <button type="submit" className="w-full bg-teal-500/10 text-teal-400 border border-teal-500/30 hover:bg-teal-500/20 font-bold py-2.5 rounded-lg transition-colors text-[10px] uppercase tracking-widest mt-2">+ Add Budget</button>
-                  </form>
-                </div>
-              </div>
-
-              {/* BSKL HOLIDAYS UTILITY */}
-              <div className="bg-[#161a23] border border-emerald-500/30 rounded-2xl p-4 sm:p-6 md:p-8 space-y-6">
-                <h3 className="text-xs font-bold uppercase text-emerald-400 tracking-[0.15em]">BSKL Holidays Utility</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6">
-                  {bsklHolidays.map((h: any) => (
-                    <div key={h.id} className="p-4 bg-[#0b0e14] rounded-xl border border-[#272b38] flex justify-between items-center shadow-sm">
-                      <div>
-                        <p className="font-bold text-white text-sm">{h.description || 'Holiday'}</p>
-                        <p className="text-[10px] text-[#8a93a6] font-mono mt-1">{h.holiday_date}</p>
-                      </div>
-                      <form action={removeBsklHoliday}>
-                        <input type="hidden" name="id" value={h.id} />
-                        <button type="submit" className="text-rose-400 hover:text-rose-300 text-lg leading-none p-1">&times;</button>
-                      </form>
-                    </div>
-                  ))}
-
-                  <form action={addBsklHoliday} className="p-4 bg-[#161a23] rounded-xl border border-dashed border-[#383e52] shadow-sm hover:border-emerald-500/50 transition-colors flex flex-col justify-center">
-                    <p className="font-bold text-emerald-400 text-sm border-b border-emerald-500/20 pb-1 mb-3">+ Add Holiday</p>
-                    <div className="space-y-3">
-                      <div>
-                        <label className="text-[9px] text-[#8a93a6] block mb-1 uppercase tracking-widest font-bold">Date</label>
-                        <input name="date" type="date" required className="w-full bg-[#0b0e14] border border-[#272b38] rounded-lg px-2.5 py-2 text-white text-xs outline-none focus:border-emerald-500/50 transition-colors" />
-                      </div>
-                      <div>
-                        <label className="text-[9px] text-[#8a93a6] block mb-1 uppercase tracking-widest font-bold">Description</label>
-                        <input name="description" type="text" className="w-full bg-[#0b0e14] border border-[#272b38] rounded-lg px-2.5 py-2 text-white text-xs outline-none focus:border-emerald-500/50 transition-colors" placeholder="e.g. Hari Raya" />
-                      </div>
-                    </div>
-                    <button type="submit" className="w-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20 font-bold py-2.5 rounded-lg transition-colors text-[10px] uppercase tracking-widest mt-3">+ Add</button>
                   </form>
                 </div>
               </div>
