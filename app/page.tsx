@@ -59,13 +59,32 @@ async function updateDebtBalances(formData: FormData) {
   const original_loan_amount = Number(formData.get('original_loan_amount') ?? 0)
   const total_debt_amount = Number(formData.get('total_debt_amount') ?? 0)
 
+  let start_date = formData.get('start_date') as string || null;
+  let end_date = formData.get('end_date') as string || null;
+  let financing_tenure = Number(formData.get('financing_tenure')) || null;
+
+  // Auto-calculate Tenure based on Limit/Base if missing
+  if (!financing_tenure && monthly_due > 0 && original_loan_amount > 0) {
+      financing_tenure = Math.ceil(original_loan_amount / monthly_due);
+  }
+  
+  // Auto-calculate End Date based on Start Date + Tenure if missing
+  if (start_date && financing_tenure && !end_date) {
+      const d = new Date(start_date);
+      d.setMonth(d.getMonth() + financing_tenure);
+      end_date = d.toISOString().split('T')[0];
+  }
+
   await supabase.from('debts').update({ 
     creditor, 
     arrears_balance: arrears, 
     float_balance: float,
     monthly_due,
     original_loan_amount,
-    total_debt_amount 
+    total_debt_amount,
+    start_date,
+    end_date,
+    financing_tenure
   }).eq('id', id)
   revalidatePath('/')
 }
@@ -80,6 +99,19 @@ async function addDebt(formData: FormData) {
   const creditor = formData.get('creditor') as string
   const monthly_due = Number(formData.get('monthly_due') ?? 0)
   const original_loan_amount = Number(formData.get('original_loan_amount') ?? 0)
+
+  let start_date = formData.get('start_date') as string || null;
+  let end_date = formData.get('end_date') as string || null;
+  let financing_tenure = Number(formData.get('financing_tenure')) || null;
+
+  if (!financing_tenure && monthly_due > 0 && original_loan_amount > 0) {
+      financing_tenure = Math.ceil(original_loan_amount / monthly_due);
+  }
+  if (start_date && financing_tenure && !end_date) {
+      const d = new Date(start_date);
+      d.setMonth(d.getMonth() + financing_tenure);
+      end_date = d.toISOString().split('T')[0];
+  }
   
   await supabase.from('debts').insert({ 
     creditor, 
@@ -88,7 +120,10 @@ async function addDebt(formData: FormData) {
     total_debt_amount: original_loan_amount,
     arrears_balance: 0, 
     float_balance: 0,
-    is_paid: false
+    is_paid: false,
+    start_date,
+    end_date,
+    financing_tenure
   })
   revalidatePath('/')
 }
@@ -569,15 +604,22 @@ export default async function Home(props: any = {}) {
   const histFirstYear = historyMonths[0].yearStr;
   const histLastYear = historyMonths[11].yearStr;
 
+  // Active Debts Filter Engine based on auto-calculated Timeframes
+  const activeDebtsThisMonth = debts?.filter((d: any) => {
+    if (d.start_date && d.start_date.substring(0, 7) > currentMonthId) return false;
+    if (d.end_date && d.end_date.substring(0, 7) < currentMonthId) return false;
+    return true;
+  }) || [];
+
   // --- LOAN CALCULATIONS ---
-  const totalLoansOutstanding = debts?.reduce((s: number, d: any) => {
+  const totalLoansOutstanding = activeDebtsThisMonth.reduce((s: number, d: any) => {
     const isPaidThisMonth = allDebtPayments.some((dp: any) => dp.debt_id == d.id && dp.paid_month === currentMonthId);
     return s + (isPaidThisMonth ? 0 : n(d.monthly_due) + n(d.arrears_balance) - n(d.float_balance));
   }, 0) ?? 0
 
-  const paidLoansThisMonth = debts?.filter((d: any) => allDebtPayments.some((dp: any) => dp.debt_id == d.id && dp.paid_month === currentMonthId)).reduce((s: number, d: any) => s + n(d.monthly_due), 0) ?? 0;
+  const paidLoansThisMonth = activeDebtsThisMonth.filter((d: any) => allDebtPayments.some((dp: any) => dp.debt_id == d.id && dp.paid_month === currentMonthId)).reduce((s: number, d: any) => s + n(d.monthly_due), 0) ?? 0;
   
-  const paidLoansStatementTotal = debts?.reduce((s: number, d: any) => {
+  const paidLoansStatementTotal = activeDebtsThisMonth.reduce((s: number, d: any) => {
     const payment = allDebtPayments.find((dp: any) => dp.debt_id == d.id && dp.paid_month === currentMonthId);
     if (payment) {
       // Use the explicitly paid custom amount if present, else fallback to standard calculation
@@ -637,11 +679,11 @@ export default async function Home(props: any = {}) {
   const progressPct = grandTotalMonthlyFootprint > 0 ? Math.min(100, (totalPaidThisMonth / grandTotalMonthlyFootprint) * 100) : 0
   
   const yearlyPaidLoans = allDebtPayments.filter((dp: any) => dp.paid_month.startsWith(year.toString())).reduce((sum: number, dp: any) => {
-    const debt = debts?.find((d: any) => d.id == dp.debt_id);
+    const debt = debts?.find((d: any) => d.id == dp.debt_id); // using global debts reference to accurately sum historical regardless if it's currently active
     return sum + (debt ? n(debt.monthly_due) : 0);
   }, 0);
 
-  const baseMonthlyLoanTotal = debts?.reduce((s: number, d: any) => s + n(d.monthly_due), 0) ?? 0
+  const baseMonthlyLoanTotal = activeDebtsThisMonth.reduce((s: number, d: any) => s + n(d.monthly_due), 0) ?? 0
   const yearlyTotalAllocated = (allBudgetsOfYear?.reduce((s: number, b: any) => s + n(b.allocated_amount), 0) ?? 0) + baseMonthlyLoanTotal * 2 + totalBsklCapitalAllTime;
   const yearlyTotalBudgetCleared = allBudgetsOfYear?.reduce((s: number, b: any) => {
     const spent = n(b.spent_amount)
@@ -1085,62 +1127,103 @@ export default async function Home(props: any = {}) {
               <div className="bg-[#161a23] border border-amber-500/30 rounded-2xl p-4 sm:p-6 md:p-8 space-y-6">
                 <h3 className="text-xs font-bold uppercase text-amber-400 tracking-[0.15em]">Statement Sync Utility</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6">
-                  {debts?.map((debt: any) => (
-                    <form key={debt.id} action={updateDebtBalances} className="p-4 sm:p-5 bg-[#0b0e14] rounded-xl border border-[#272b38] space-y-4 shadow-sm hover:border-[#383e52] transition-colors">
-                      <input type="hidden" name="id" value={debt.id} />
-                      <div className="flex items-center gap-2">
-                        <input type="text" name="creditor" defaultValue={debt.creditor} className="w-full bg-transparent font-bold text-white text-sm outline-none border-b border-transparent focus:border-amber-500/50 pb-1 transition-colors" placeholder="Liability Name" />
-                        <button formAction={removeDebt} type="submit" className="text-[#8a93a6] hover:text-rose-400 hover:bg-rose-500/10 p-1.5 rounded transition-colors" title="Delete Liability">
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
-                      </div>
-                      <div className="grid grid-cols-2 gap-3 sm:gap-4">
-                        <div className="col-span-2">
-                          <label className="text-[9px] text-[#8a93a6] block mb-1.5 uppercase tracking-widest font-bold">Outstanding Principal (RM)</label>
-                          <input name="total_debt_amount" type="number" step="0.01" defaultValue={n(debt.total_debt_amount).toFixed(2)} className="w-full bg-[#161a23] border border-[#272b38] rounded-lg px-2.5 py-2 text-white text-xs outline-none focus:border-amber-500/50 transition-colors" />
-                        </div>
-                        <div>
-                          <label className="text-[9px] text-[#8a93a6] block mb-1.5 uppercase tracking-widest font-bold">Monthly Due (RM)</label>
-                          <input name="monthly_due" type="number" step="0.01" defaultValue={n(debt.monthly_due).toFixed(2)} className="w-full bg-[#161a23] border border-[#272b38] rounded-lg px-2.5 py-2 text-white text-xs outline-none focus:border-amber-500/50 transition-colors" />
-                        </div>
-                        <div>
-                          <label className="text-[9px] text-[#8a93a6] block mb-1.5 uppercase tracking-widest font-bold">Facility Limit (RM)</label>
-                          <input name="original_loan_amount" type="number" step="0.01" defaultValue={n(debt.original_loan_amount).toFixed(2)} className="w-full bg-[#161a23] border border-[#272b38] rounded-lg px-2.5 py-2 text-white text-xs outline-none focus:border-amber-500/50 transition-colors" />
-                        </div>
-                        <div>
-                          <label className="text-[9px] text-[#8a93a6] block mb-1.5 uppercase tracking-widest font-bold">Arrears (RM)</label>
-                          <input name="arrears" type="number" step="0.01" defaultValue={n(debt.arrears_balance).toFixed(2)} className="w-full bg-[#161a23] border border-[#272b38] rounded-lg px-2.5 py-2 text-white text-xs outline-none focus:border-amber-500/50 transition-colors" />
-                        </div>
-                        <div>
-                          <label className="text-[9px] text-[#8a93a6] block mb-1.5 uppercase tracking-widest font-bold">Float (RM)</label>
-                          <input name="float" type="number" step="0.01" defaultValue={n(debt.float_balance).toFixed(2)} className="w-full bg-[#161a23] border border-[#272b38] rounded-lg px-2.5 py-2 text-white text-xs outline-none focus:border-amber-500/50 transition-colors" />
-                        </div>
-                      </div>
-                      <button type="submit" className="w-full bg-amber-500/10 text-amber-400 border border-amber-500/30 hover:bg-amber-500/20 font-bold py-2.5 rounded-lg transition-colors text-[10px] uppercase tracking-widest mt-2">Save Changes</button>
-                    </form>
-                  ))}
+                  {debts?.map((debt: any) => {
+                    const calcTenure = n(debt.monthly_due) > 0 ? Math.ceil(n(debt.original_loan_amount) / n(debt.monthly_due)) : 0;
+                    const defaultTenure = debt.financing_tenure || calcTenure || '';
+                    let calcEndDate = '';
+                    if (debt.start_date && defaultTenure) {
+                       const d = new Date(debt.start_date);
+                       d.setMonth(d.getMonth() + Number(defaultTenure));
+                       calcEndDate = d.toISOString().split('T')[0];
+                    }
+                    const defaultEndDate = debt.end_date || calcEndDate || '';
+                    const defaultStartDate = debt.start_date || '';
 
-                  <form action={addDebt} className="p-4 sm:p-5 bg-[#161a23] rounded-xl border border-dashed border-[#383e52] space-y-4 shadow-sm hover:border-amber-500/50 transition-colors flex flex-col justify-center">
-                    <p className="font-bold text-amber-400 text-sm border-b border-amber-500/20 pb-1">+ Add New Liability</p>
-                    <div className="space-y-3 sm:space-y-4">
-                      <div>
-                         <label className="text-[9px] text-[#8a93a6] block mb-1.5 uppercase tracking-widest font-bold">Creditor Name</label>
-                         <input name="creditor" type="text" required className="w-full bg-[#0b0e14] border border-[#272b38] rounded-lg px-2.5 py-2 text-white text-xs outline-none focus:border-amber-500/50 transition-colors" placeholder="e.g. Home Loan" />
-                      </div>
-                      <div className="grid grid-cols-2 gap-3 sm:gap-4">
+                    return (
+                      <form key={debt.id} action={updateDebtBalances} className="p-4 sm:p-5 bg-[#0b0e14] rounded-xl border border-[#272b38] space-y-4 shadow-sm hover:border-[#383e52] transition-colors flex flex-col justify-between">
                         <div>
-                          <label className="text-[9px] text-[#8a93a6] block mb-1.5 uppercase tracking-widest font-bold">Monthly Due</label>
-                          <input name="monthly_due" type="number" step="0.01" required className="w-full bg-[#0b0e14] border border-[#272b38] rounded-lg px-2.5 py-2 text-white text-xs outline-none focus:border-amber-500/50 transition-colors" />
+                          <input type="hidden" name="id" value={debt.id} />
+                          <div className="flex items-center gap-2 mb-4">
+                            <input type="text" name="creditor" defaultValue={debt.creditor} className="w-full bg-transparent font-bold text-white text-sm outline-none border-b border-transparent focus:border-amber-500/50 pb-1 transition-colors" placeholder="Liability Name" />
+                            <button formAction={removeDebt} type="submit" className="text-[#8a93a6] hover:text-rose-400 hover:bg-rose-500/10 p-1.5 rounded transition-colors" title="Delete Liability">
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          </div>
+                          <div className="grid grid-cols-2 gap-3 sm:gap-4">
+                            <div className="col-span-2">
+                              <label className="text-[9px] text-[#8a93a6] block mb-1.5 uppercase tracking-widest font-bold">Outstanding Principal (RM)</label>
+                              <input name="total_debt_amount" type="number" step="0.01" defaultValue={n(debt.total_debt_amount).toFixed(2)} className="w-full bg-[#161a23] border border-[#272b38] rounded-lg px-2.5 py-2 text-white text-xs outline-none focus:border-amber-500/50 transition-colors" />
+                            </div>
+                            <div>
+                              <label className="text-[9px] text-[#8a93a6] block mb-1.5 uppercase tracking-widest font-bold">Monthly Due (RM)</label>
+                              <input name="monthly_due" type="number" step="0.01" defaultValue={n(debt.monthly_due).toFixed(2)} className="w-full bg-[#161a23] border border-[#272b38] rounded-lg px-2.5 py-2 text-white text-xs outline-none focus:border-amber-500/50 transition-colors" />
+                            </div>
+                            <div>
+                              <label className="text-[9px] text-[#8a93a6] block mb-1.5 uppercase tracking-widest font-bold">Facility Limit (RM)</label>
+                              <input name="original_loan_amount" type="number" step="0.01" defaultValue={n(debt.original_loan_amount).toFixed(2)} className="w-full bg-[#161a23] border border-[#272b38] rounded-lg px-2.5 py-2 text-white text-xs outline-none focus:border-amber-500/50 transition-colors" />
+                            </div>
+                            <div>
+                              <label className="text-[9px] text-[#8a93a6] block mb-1.5 uppercase tracking-widest font-bold">Start Date</label>
+                              <input name="start_date" type="date" defaultValue={defaultStartDate} className="w-full bg-[#161a23] border border-[#272b38] rounded-lg px-2.5 py-2 text-white text-xs outline-none focus:border-amber-500/50 transition-colors" />
+                            </div>
+                            <div>
+                              <label className="text-[9px] text-[#8a93a6] block mb-1.5 uppercase tracking-widest font-bold">Tenure (Months)</label>
+                              <input name="financing_tenure" type="number" defaultValue={defaultTenure} placeholder="Auto" className="w-full bg-[#161a23] border border-[#272b38] rounded-lg px-2.5 py-2 text-white text-xs outline-none focus:border-amber-500/50 transition-colors" />
+                            </div>
+                            <div className="col-span-2">
+                              <label className="text-[9px] text-[#8a93a6] block mb-1.5 uppercase tracking-widest font-bold">End Date</label>
+                              <input name="end_date" type="date" defaultValue={defaultEndDate} placeholder="Auto-calculated if blank" className="w-full bg-[#161a23] border border-[#272b38] rounded-lg px-2.5 py-2 text-white text-xs outline-none focus:border-amber-500/50 transition-colors" />
+                            </div>
+                            <div>
+                              <label className="text-[9px] text-[#8a93a6] block mb-1.5 uppercase tracking-widest font-bold">Arrears (RM)</label>
+                              <input name="arrears" type="number" step="0.01" defaultValue={n(debt.arrears_balance).toFixed(2)} className="w-full bg-[#161a23] border border-[#272b38] rounded-lg px-2.5 py-2 text-white text-xs outline-none focus:border-amber-500/50 transition-colors" />
+                            </div>
+                            <div>
+                              <label className="text-[9px] text-[#8a93a6] block mb-1.5 uppercase tracking-widest font-bold">Float (RM)</label>
+                              <input name="float" type="number" step="0.01" defaultValue={n(debt.float_balance).toFixed(2)} className="w-full bg-[#161a23] border border-[#272b38] rounded-lg px-2.5 py-2 text-white text-xs outline-none focus:border-amber-500/50 transition-colors" />
+                            </div>
+                          </div>
                         </div>
+                        <button type="submit" className="w-full bg-amber-500/10 text-amber-400 border border-amber-500/30 hover:bg-amber-500/20 font-bold py-2.5 rounded-lg transition-colors text-[10px] uppercase tracking-widest mt-4">Save Changes</button>
+                      </form>
+                    )
+                  })}
+
+                  <form action={addDebt} className="p-4 sm:p-5 bg-[#161a23] rounded-xl border border-dashed border-[#383e52] space-y-4 shadow-sm hover:border-amber-500/50 transition-colors flex flex-col justify-between">
+                    <div>
+                      <p className="font-bold text-amber-400 text-sm border-b border-amber-500/20 pb-1 mb-4">+ Add New Liability</p>
+                      <div className="space-y-3 sm:space-y-4">
                         <div>
-                          <label className="text-[9px] text-[#8a93a6] block mb-1.5 uppercase tracking-widest font-bold">Facility Limit</label>
-                          <input name="original_loan_amount" type="number" step="0.01" required className="w-full bg-[#0b0e14] border border-[#272b38] rounded-lg px-2.5 py-3 text-white text-xs outline-none focus:border-amber-500/50 transition-colors" />
+                           <label className="text-[9px] text-[#8a93a6] block mb-1.5 uppercase tracking-widest font-bold">Creditor Name</label>
+                           <input name="creditor" type="text" required className="w-full bg-[#0b0e14] border border-[#272b38] rounded-lg px-2.5 py-2 text-white text-xs outline-none focus:border-amber-500/50 transition-colors" placeholder="e.g. Home Loan" />
+                        </div>
+                        <div className="grid grid-cols-2 gap-3 sm:gap-4">
+                          <div>
+                            <label className="text-[9px] text-[#8a93a6] block mb-1.5 uppercase tracking-widest font-bold">Monthly Due</label>
+                            <input name="monthly_due" type="number" step="0.01" required className="w-full bg-[#0b0e14] border border-[#272b38] rounded-lg px-2.5 py-2 text-white text-xs outline-none focus:border-amber-500/50 transition-colors" />
+                          </div>
+                          <div>
+                            <label className="text-[9px] text-[#8a93a6] block mb-1.5 uppercase tracking-widest font-bold">Facility Limit</label>
+                            <input name="original_loan_amount" type="number" step="0.01" required className="w-full bg-[#0b0e14] border border-[#272b38] rounded-lg px-2.5 py-2 text-white text-xs outline-none focus:border-amber-500/50 transition-colors" />
+                          </div>
+                          <div>
+                            <label className="text-[9px] text-[#8a93a6] block mb-1.5 uppercase tracking-widest font-bold">Start Date</label>
+                            <input name="start_date" type="date" className="w-full bg-[#0b0e14] border border-[#272b38] rounded-lg px-2.5 py-2 text-white text-xs outline-none focus:border-amber-500/50 transition-colors" />
+                          </div>
+                          <div>
+                            <label className="text-[9px] text-[#8a93a6] block mb-1.5 uppercase tracking-widest font-bold">Tenure (Mth)</label>
+                            <input name="financing_tenure" type="number" placeholder="Auto" className="w-full bg-[#0b0e14] border border-[#272b38] rounded-lg px-2.5 py-2 text-white text-xs outline-none focus:border-amber-500/50 transition-colors" />
+                          </div>
+                          <div className="col-span-2">
+                            <label className="text-[9px] text-[#8a93a6] block mb-1.5 uppercase tracking-widest font-bold">End Date</label>
+                            <input name="end_date" type="date" placeholder="Auto" className="w-full bg-[#0b0e14] border border-[#272b38] rounded-lg px-2.5 py-2 text-white text-xs outline-none focus:border-amber-500/50 transition-colors" />
+                          </div>
                         </div>
                       </div>
                     </div>
-                    <button type="submit" className="w-full bg-amber-500/10 text-amber-400 border border-amber-500/30 hover:bg-amber-500/20 font-bold py-2.5 rounded-lg transition-colors text-[10px] uppercase tracking-widest mt-2">+ Add Liability</button>
+                    <button type="submit" className="w-full bg-amber-500/10 text-amber-400 border border-amber-500/30 hover:bg-amber-500/20 font-bold py-2.5 rounded-lg transition-colors text-[10px] uppercase tracking-widest mt-4">+ Add Liability</button>
                   </form>
                 </div>
               </div>
@@ -1335,7 +1418,7 @@ export default async function Home(props: any = {}) {
               </div>
               
               <div className="space-y-4">
-                {debts?.map((debt: any) => {
+                {activeDebtsThisMonth.map((debt: any) => {
                   const paymentRecord = allDebtPayments.find((dp: any) => dp.debt_id == debt.id && dp.paid_month === currentMonthId);
                   const debtIsPaidThisMonth = !!paymentRecord;
                   const statementTotalDue = n(debt.monthly_due) + n(debt.arrears_balance) - n(debt.float_balance)
@@ -1454,7 +1537,7 @@ export default async function Home(props: any = {}) {
 
                           <div className="bg-[#161a23] border border-[#272b38] rounded-xl p-3 sm:p-4 flex justify-between items-center text-[9px] sm:text-[10px] font-bold text-[#8a93a6] uppercase tracking-widest">
                             <p>Since: <span className="text-white ml-1.5">{
-                               debt.creditor?.toLowerCase().includes('shopee') ? '01/06/2026' : 
+                               debt.start_date ? new Date(debt.start_date).toLocaleDateString('en-MY') : 
                                (debt.date_since ? new Date(debt.date_since).toLocaleDateString('en-MY') : '28/11/2018')
                             }</span></p>
                             <p>Upd: <span className="text-white ml-1.5">{new Date().toLocaleDateString('en-MY')}</span></p>
@@ -1492,11 +1575,8 @@ export default async function Home(props: any = {}) {
                                   <div className="flex items-center">
                                     {historyMonths.map((m: any, i: number) => {
                                       let isTracked = true;
-                                      if (debt.creditor?.toLowerCase().includes('shopee')) {
-                                        if (m.monthId < '2026-06') isTracked = false;
-                                      } else {
-                                        if (m.monthId < '2026-05') isTracked = false;
-                                      }
+                                      if (debt.start_date && m.monthId < debt.start_date.substring(0, 7)) isTracked = false;
+                                      if (debt.end_date && m.monthId > debt.end_date.substring(0, 7)) isTracked = false;
 
                                       const isMonthPaid = allDebtPayments.some((dp: any) => dp.debt_id == debt.id && dp.paid_month === m.monthId);
                                       const isFuture = m.monthId > currentMonthId;
@@ -1548,8 +1628,8 @@ export default async function Home(props: any = {}) {
                                       const nextMonth = historyMonths[i + 1];
                                       let nextIsTracked = true;
                                       if (nextMonth) {
-                                        if (debt.creditor?.toLowerCase().includes('shopee') && nextMonth.monthId < '2026-06') nextIsTracked = false;
-                                        else if (nextMonth.monthId < '2026-05') nextIsTracked = false;
+                                        if (debt.start_date && nextMonth.monthId < debt.start_date.substring(0, 7)) nextIsTracked = false;
+                                        if (debt.end_date && nextMonth.monthId > debt.end_date.substring(0, 7)) nextIsTracked = false;
                                       }
                                       
                                       const nextIsFuture = nextMonth && nextMonth.monthId > currentMonthId;
