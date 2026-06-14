@@ -645,6 +645,10 @@ export default async function Home(props: any = {}) {
     const displayAmount = Math.abs(cNetBalance);
     const displayPct = cCapital > 0 ? (displayAmount / cCapital) * 100 : 0;
     
+    const recoveryPct = cCapital > 0 ? (cTotalRepaid / cCapital) * 100 : 0;
+    const greenWidth = Math.min(100, recoveryPct);
+    const blueWidth = Math.max(0, Math.min(100, recoveryPct - 100));
+
     if (c.effective_date.startsWith(currentMonthId)) {
       totalBsklCapitalOutflowThisMonth += cCapital;
     }
@@ -657,7 +661,7 @@ export default async function Home(props: any = {}) {
       totalBsklRemainingCapitalToPay += cNetBalance;
     }
 
-    return { ...c, cTotalRepaid, isProfit, displayAmount, displayPct, cPaidThisMonth };
+    return { ...c, cTotalRepaid, isProfit, displayAmount, displayPct, cPaidThisMonth, recoveryPct, greenWidth, blueWidth };
   });
 
   // --- BUDGET & POOL CALCULATIONS ---
@@ -1694,7 +1698,7 @@ export default async function Home(props: any = {}) {
                     </div>
                   ) : (
                     enrichedContracts.map((c: any, idx: number) => (
-                      <div key={c.id} className={`p-4 sm:p-6 ${idx !== enrichedContracts.length - 1 ? 'border-b border-[#272b38]' : 'border-b-4 border-[#0b0e14]'}`}>
+                      <div key={c.id} className={`p-4 sm:p-6 ${idx !== enrichedContracts.length - 1 ? 'border-b border-[#272b38]' : 'border-b-4 border-[#0b0e14]'} flex flex-col gap-4 sm:gap-5`}>
                         <div className="flex justify-between items-start gap-2">
                           <div>
                             <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
@@ -1711,6 +1715,22 @@ export default async function Home(props: any = {}) {
                               RM {c.displayAmount.toLocaleString('en-MY', { minimumFractionDigits: 2 })} <span className="text-[10px] sm:text-xs font-medium opacity-70">({c.displayPct.toFixed(0)}%)</span>
                             </p>
                           </div>
+                        </div>
+                        
+                        {/* Minimalist Border Progress Bar */}
+                        <div className="w-full h-px bg-[#272b38] relative mt-1">
+                          {/* Green Base Bar (Capital Recovery up to 100%) */}
+                          <div 
+                            className="absolute top-0 left-0 h-full bg-teal-500/60 shadow-[0_0_8px_rgba(45,212,191,0.4)] transition-all duration-1000 ease-out" 
+                            style={{ width: `${c.greenWidth}%` }}
+                          />
+                          {/* Blue Overlay Bar (Profit > 100%) */}
+                          {c.blueWidth > 0 && (
+                            <div 
+                              className="absolute top-0 left-0 h-full bg-blue-500/80 shadow-[0_0_8px_rgba(59,130,246,0.6)] transition-all duration-1000 ease-out z-10" 
+                              style={{ width: `${c.blueWidth}%` }}
+                            />
+                          )}
                         </div>
                       </div>
                     ))
