@@ -1641,8 +1641,13 @@ export default async function Home(props: any = {}) {
                         </div>
 
                         {logs.length > 0 && (
-                          <div className="bg-[#0b0e14] rounded-lg border border-[#272b38] p-3 space-y-1.5 font-mono text-[9px] text-[#8a93a6] max-h-[110px] overflow-y-auto">
-                            <p className="text-[8px] font-bold text-slate-500 uppercase tracking-widest mb-1 border-b border-[#272b38]/50 pb-1">Sub-Ledger Transactions</p>
+                          <div className="bg-[#0b0e14] rounded-lg border border-[#272b38] p-3 space-y-1.5 font-mono text-[9px] text-[#8a93a6] max-h-[110px] overflow-y-auto scrollbar-thin">
+                            <div className="flex justify-between items-center border-b border-[#272b38]/50 pb-1.5 mb-1.5">
+                              <p className="text-[8px] font-bold text-slate-500 uppercase tracking-widest">Sub-Ledger Transactions</p>
+                              <a href={`?month=${currentSelectedMonth}&log=true${isEditing ? '&edit=true' : ''}`} className="text-[7px] bg-[#161a23] text-teal-400 border border-[#383e52] hover:border-teal-500/40 hover:bg-teal-500/10 px-2 py-0.5 rounded transition-all uppercase tracking-widest shadow-sm">
+                                Details &raquo;
+                              </a>
+                            </div>
                             {logs.map((log: any) => {
                               let prefix = '-'
                               let colorClass = 'text-rose-400'
