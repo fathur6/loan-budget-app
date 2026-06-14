@@ -190,6 +190,29 @@ async function executeBudgetAction(formData: FormData) {
   revalidatePath('/')
 }
 
+// --- Direct Pool Cash Inflow Actions ---
+async function addCashInflow(formData: FormData) {
+  'use server'
+  const supabasePath = "./supabase"
+  const cachePath = "next/cache"
+  const { supabase } = await import(supabasePath)
+  const { revalidatePath } = await import(cachePath)
+
+  const monthId = formData.get('monthId') as string
+  const particular = formData.get('particular') as string
+  const amount = Number(formData.get('amount') ?? 0)
+
+  if (amount <= 0 || !particular) return
+
+  await supabase.from('cash_inflows').insert({
+    month_id: monthId,
+    particular: particular,
+    amount: amount
+  })
+
+  revalidatePath('/')
+}
+
 // --- Centralized Ledger Amend & Delete Log Actions ---
 async function deleteLogEntry(formData: FormData) {
   'use server'
@@ -218,6 +241,8 @@ async function deleteLogEntry(formData: FormData) {
     }
   } else if (source === 'transfer') {
     await supabase.from('liquidity_transfers').delete().eq('id', id);
+  } else if (source === 'inflow') {
+    await supabase.from('cash_inflows').delete().eq('id', id);
   } else if (source === 'debt') {
     const debt_id = formData.get('raw_debt_id') as string;
     const paid_month = formData.get('raw_paid_month') as string;
@@ -260,6 +285,8 @@ async function amendLogEntry(formData: FormData) {
     }
   } else if (source === 'transfer' && newAmount >= 0) {
     await supabase.from('liquidity_transfers').update({ amount: newAmount }).eq('id', id);
+  } else if (source === 'inflow' && newAmount >= 0) {
+    await supabase.from('cash_inflows').update({ amount: newAmount }).eq('id', id);
   }
   revalidatePath('/')
 }
@@ -515,6 +542,7 @@ export default async function Home(props: any = {}) {
   let bsklContracts: any[] = [];
   let bsklPayments: any[] = [];
   let bsklHolidays: any[] = [];
+  let cashInflows: any[] = [];
   let currentSalary = 0;
 
   try {
@@ -547,7 +575,7 @@ export default async function Home(props: any = {}) {
 
       const [
         { data: d1 }, { data: d2 }, { data: d3 }, { data: d4 }, 
-        { data: d5 }, { data: d6 }, { data: d7 }, { data: d8 }, { data: d9 }, { data: d10 }
+        { data: d5 }, { data: d6 }, { data: d7 }, { data: d8 }, { data: d9 }, { data: d10 }, { data: d11 }
       ] = await Promise.all([
         supabase.from('debts').select('*').order('is_akpk_obligation', { ascending: false }),
         supabase.from('debt_payments').select('*'),
@@ -558,7 +586,8 @@ export default async function Home(props: any = {}) {
         supabase.from('bskl_payments').select('*'),
         supabase.from('bskl_holidays').select('*').order('holiday_date', { ascending: true }),
         supabase.from('monthly_salary').select('*').eq('month_id', currentMonthId).single(),
-        supabase.from('budget_transactions').select('*').order('created_at', { ascending: false })
+        supabase.from('budget_transactions').select('*').order('created_at', { ascending: false }),
+        supabase.from('cash_inflows').select('*').order('created_at', { ascending: false })
       ]);
 
       if (d1) debts = d1;
@@ -571,6 +600,7 @@ export default async function Home(props: any = {}) {
       if (d8) bsklHolidays = d8;
       if (d9) currentSalary = Number(d9.salary_amount);
       if (d10) budgetTransactions = d10;
+      if (d11) cashInflows = d11;
     }
   } catch (error) {
     // Canvas rendering protection
@@ -673,7 +703,8 @@ export default async function Home(props: any = {}) {
 
   const totalTransferredFromPoolAllTime = transfers.reduce((s: number, t: any) => s + n(t.amount), 0);
   const poolTransfersInThisMonth = transfers.filter((t: any) => t.month_id === currentMonthId).reduce((s: number, t: any) => s + n(t.amount), 0);
-  const currentPoolBalance = totalSavedAcrossAllMonths + totalBsklRepaidAllTime - totalTransferredFromPoolAllTime;
+  const totalCashInflowsAllTime = cashInflows.reduce((s: number, i: any) => s + n(i.amount), 0);
+  const currentPoolBalance = totalSavedAcrossAllMonths + totalBsklRepaidAllTime + totalCashInflowsAllTime - totalTransferredFromPoolAllTime;
 
   // --- CASHFLOW & GRAND TOTALS ---
   const currentCheckingBalance = currentSalary + poolTransfersInThisMonth - totalBudgetsAllocatedThisMonth - paidLoansStatementTotal - totalBsklCapitalOutflowThisMonth;
@@ -744,6 +775,18 @@ export default async function Home(props: any = {}) {
       type: 'in',
       source: 'transfer',
       raw: t
+    });
+  });
+
+  cashInflows.filter((i: any) => i.month_id === currentMonthId).forEach((i: any) => {
+    systemLogs.push({
+      id: i.id,
+      date: i.created_at || `${currentMonthId}-01T00:00:00Z`,
+      description: `Inflow: ${i.particular}`,
+      amount: Number(i.amount),
+      type: 'in',
+      source: 'inflow',
+      raw: i
     });
   });
 
@@ -901,7 +944,7 @@ export default async function Home(props: any = {}) {
                        </div>
                        {!isReadOnly && (
                          <div className="flex justify-end gap-2 border-t border-[#272b38] pt-3 mt-1">
-                           {(log.source === 'budget' || log.source === 'transfer') && !isEditingLog && (
+                           {(log.source === 'budget' || log.source === 'transfer' || log.source === 'inflow') && !isEditingLog && (
                              <a href={`?month=${currentSelectedMonth}&log=true&editLog=${log.id}${isEditing ? '&edit=true' : ''}`} className="text-[9px] uppercase tracking-widest font-bold px-4 py-2 bg-[#161a23] text-amber-400 border border-amber-500/30 rounded-lg hover:bg-amber-500/10 transition-colors">Amend</a>
                            )}
                            {!isEditingLog && (
@@ -916,7 +959,7 @@ export default async function Home(props: any = {}) {
                          </div>
                        )}
 
-                       {isEditingLog && (log.source === 'budget' || log.source === 'transfer') && (
+                       {isEditingLog && (log.source === 'budget' || log.source === 'transfer' || log.source === 'inflow') && (
                          <form action={amendLogEntry} className="flex gap-2 border-t border-[#272b38] pt-3 mt-1">
                            <input type="hidden" name="id" value={log.id} />
                            <input type="hidden" name="source" value={log.source} />
@@ -1134,6 +1177,9 @@ export default async function Home(props: any = {}) {
                 <div className="space-y-1.5 font-medium text-[#8a93a6] mt-4 text-[9px] border-t border-[#272b38]/50 pt-3">
                   <div className="flex justify-between items-center"><span className="uppercase tracking-widest">Total Pooled IN</span> <span className="text-teal-400 font-mono">+{totalSavedAcrossAllMonths.toFixed(2)}</span></div>
                   <div className="flex justify-between items-center"><span className="uppercase tracking-widest">Trade Returns IN</span> <span className="text-teal-400 font-mono">+{totalBsklRepaidAllTime.toFixed(2)}</span></div>
+                  {totalCashInflowsAllTime > 0 && (
+                    <div className="flex justify-between items-center"><span className="uppercase tracking-widest">Cash Inflows IN</span> <span className="text-teal-400 font-mono">+{totalCashInflowsAllTime.toFixed(2)}</span></div>
+                  )}
                   <div className="flex justify-between items-center"><span className="uppercase tracking-widest">Total Transf. OUT</span> <span className="text-rose-400 font-mono">-{totalTransferredFromPoolAllTime.toFixed(2)}</span></div>
                 </div>
               </div>
@@ -1805,6 +1851,52 @@ export default async function Home(props: any = {}) {
                       <span className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded bg-[#0b0e14] border border-[#272b38]/50"></div> Closed / Holiday</span>
                     </div>
                   </div>
+                </div>
+              </div>
+
+              {/* CASH INFLOW ACCOUNT */}
+              <div className="mt-8 pt-2">
+                <div className="flex justify-between items-center mb-4 pl-1">
+                  <h2 className="text-[11px] font-semibold uppercase text-[#8a93a6] tracking-[0.15em]">Cash Inflow</h2>
+                  <span className="border border-emerald-500/30 text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded text-[9px] font-bold uppercase tracking-widest">LIQUIDITY</span>
+                </div>
+                <div className="bg-[#161a23] border border-[#272b38] rounded-xl shadow-sm overflow-hidden hover:border-[#383e52] transition-colors p-4 sm:p-5 md:p-6">
+                   
+                   {!isReadOnly && (
+                      <form action={addCashInflow} className="flex flex-col sm:flex-row gap-3 mb-6">
+                          <input type="hidden" name="monthId" value={currentMonthId} />
+                          <div className="flex-1">
+                             <label className="text-[9px] text-[#8a93a6] block mb-1.5 uppercase tracking-widest font-bold">Particular</label>
+                             <input name="particular" type="text" required placeholder="e.g. Freelance Design" className="w-full bg-[#0b0e14] border border-[#272b38] rounded-lg px-3 py-2 text-white text-xs outline-none focus:border-emerald-500/50 transition-colors" />
+                          </div>
+                          <div className="w-full sm:w-1/3">
+                             <label className="text-[9px] text-[#8a93a6] block mb-1.5 uppercase tracking-widest font-bold">Amount (RM)</label>
+                             <input name="amount" type="number" step="0.01" required placeholder="0.00" className="w-full bg-[#0b0e14] border border-[#272b38] rounded-lg px-3 py-2 text-white text-xs outline-none focus:border-emerald-500/50 transition-colors" />
+                          </div>
+                          <div className="flex items-end">
+                             <button type="submit" className="w-full sm:w-auto bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20 font-bold py-2 px-6 rounded-lg transition-colors text-[10px] uppercase tracking-widest h-[34px] flex items-center justify-center">Execute</button>
+                          </div>
+                      </form>
+                   )}
+
+                   {/* Mini Sub-Ledger for Inflows */}
+                   <div className="bg-[#0b0e14] rounded-lg border border-[#272b38] p-3 space-y-1.5 font-mono text-[9px] text-[#8a93a6] max-h-[150px] overflow-y-auto scrollbar-thin">
+                      <div className="flex justify-between items-center border-b border-[#272b38]/50 pb-1.5 mb-1.5">
+                        <p className="text-[8px] font-bold text-slate-500 uppercase tracking-widest">Sub-Ledger Transactions</p>
+                        <a href={`?month=${currentSelectedMonth}&log=true${isEditing ? '&edit=true' : ''}`} className="text-[7px] bg-[#161a23] text-emerald-400 border border-[#383e52] hover:border-emerald-500/40 hover:bg-emerald-500/10 px-2 py-0.5 rounded transition-all uppercase tracking-widest shadow-sm">
+                          Details &raquo;
+                        </a>
+                      </div>
+                      {cashInflows.filter((i: any) => i.month_id === currentMonthId).length === 0 && <p className="text-center py-2 opacity-50">No inflows recorded this month.</p>}
+                      {cashInflows.filter((i: any) => i.month_id === currentMonthId).map((item: any) => (
+                        <div key={item.id} className="flex justify-between items-center">
+                          <span className="w-20 truncate">{new Date(item.created_at).toLocaleDateString('en-MY')}</span>
+                          <span className="flex-1 uppercase tracking-wide text-[8px] opacity-80 truncate px-2">[{item.particular}]</span>
+                          <span className="font-bold text-emerald-400">+RM {Number(item.amount).toFixed(2)}</span>
+                        </div>
+                      ))}
+                   </div>
+
                 </div>
               </div>
             </section>
