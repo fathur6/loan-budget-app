@@ -1,7 +1,7 @@
 // ---------- SERVER ACTIONS ----------
 
 // --- Perpetual Debt Tracking Actions ---
-async function toggleDebt(formData: FormData) {
+async function payDebt(formData: FormData) {
   'use server'
   const supabasePath = "./supabase"
   const cachePath = "next/cache"
@@ -10,18 +10,37 @@ async function toggleDebt(formData: FormData) {
   
   const debtId = formData.get('id') as string
   const monthId = formData.get('monthId') as string
-  const isPaid = formData.get('isPaid') === 'true'
+  const amountPaid = Number(formData.get('amountPaid') ?? 0)
   
-  if (isPaid) {
-    await supabase.from('debt_payments').delete().match({ debt_id: debtId, paid_month: monthId })
+  if (amountPaid <= 0) return;
+
+  const { data: existing } = await supabase.from('debt_payments').select('*').match({ debt_id: debtId, paid_month: monthId }).single()
+  
+  if (existing) {
+    // Tambah nilai pada bayaran sedia ada
+    await supabase.from('debt_payments').update({ amount_paid: Number(existing.amount_paid ?? 0) + amountPaid }).match({ debt_id: debtId, paid_month: monthId })
   } else {
-    const amountPaid = Number(formData.get('amountPaid') ?? 0)
+    // Masukkan rekod bayaran baharu
     await supabase.from('debt_payments').insert({ 
       debt_id: debtId, 
       paid_month: monthId,
       amount_paid: amountPaid
     })
   }
+  revalidatePath('/')
+}
+
+async function undoDebtPayment(formData: FormData) {
+  'use server'
+  const supabasePath = "./supabase"
+  const cachePath = "next/cache"
+  const { supabase } = await import(supabasePath)
+  const { revalidatePath } = await import(cachePath)
+  
+  const debtId = formData.get('id') as string
+  const monthId = formData.get('monthId') as string
+  
+  await supabase.from('debt_payments').delete().match({ debt_id: debtId, paid_month: monthId })
   revalidatePath('/')
 }
 
@@ -952,7 +971,7 @@ export default async function Home(props: any = {}) {
               <div className="relative z-10">
                 <div className="flex justify-between items-start mb-2">
                   <p className="text-[10px] sm:text-[11px] text-[#8a93a6] font-semibold uppercase tracking-[0.15em]">Liquidity Pool</p>
-                  <span className="border border-teal-500/30 text-teal-400 bg-teal-500/10 px-2 py-0.5 sm:py-1 rounded text-[8px] sm:text-[9px] font-bold uppercase tracking-widest flex items-center gap-1">
+                  <span className="border border-teal-500/30 text-teal-400 bg-teal-500/10 px-2.5 py-0.5 sm:py-1 rounded text-[8px] sm:text-[9px] font-bold uppercase tracking-widest flex items-center gap-1">
                     <span className="w-1 h-1 rounded-full bg-teal-400 animate-pulse"></span> LOCKED
                   </span>
                 </div>
@@ -1223,7 +1242,7 @@ export default async function Home(props: any = {}) {
                   }
                   
                   return (
-                    <div key={debt.id} className={`rounded-xl border transition-all duration-300 overflow-hidden ${debtIsPaidThisMonth ? 'border-[#272b38] bg-[#0b0e14] opacity-60' : 'border-[#272b38] bg-[#161a23]'} ${isExpanded ? 'border-teal-500/50 shadow-[0_0_15px_rgba(20,184,166,0.1)]' : ''}`}>
+                    <div key={debt.id} className={`rounded-xl border transition-all duration-300 overflow-hidden border-[#272b38] bg-[#161a23] ${isExpanded ? 'border-teal-500/50 shadow-[0_0_15px_rgba(20,184,166,0.1)]' : ''}`}>
                       <div className="p-4 sm:p-5 md:p-6 flex justify-between items-center gap-3">
                         <div className="space-y-1 sm:space-y-2">
                           <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
@@ -1246,58 +1265,48 @@ export default async function Home(props: any = {}) {
 
                         {/* HIGHLY CUSTOM TRANSACTION-READY INPUT FIELD REPLICA */}
                         <div className="flex flex-col items-end gap-2 sm:gap-3 flex-shrink-0">
-                          {debtIsPaidThisMonth ? (
-                            <div className="flex flex-col items-end gap-1 sm:gap-1.5">
-                              <div className="text-right">
-                                <p className="font-mono text-teal-400 font-bold text-base sm:text-lg">RM {actualAmountPaid.toFixed(2)}</p>
-                                <p className="text-[8px] text-[#8a93a6] font-bold uppercase tracking-widest mt-0.5">Paid Balance</p>
-                              </div>
-                              {isReadOnly ? (
-                                <span className="text-[8px] sm:text-[9px] font-bold uppercase tracking-widest px-3 py-1 rounded-full border bg-[#0b0e14] text-teal-400 border-teal-500/20">
-                                  Settled
-                                </span>
-                              ) : (
-                                <form action={toggleDebt}>
-                                  <input type="hidden" name="id" value={debt.id} />
-                                  <input type="hidden" name="monthId" value={currentMonthId} />
-                                  <input type="hidden" name="isPaid" value="true" />
-                                  <button type="submit" className="text-[8px] sm:text-[9px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-full border bg-[#0b0e14] text-[#8a93a6] border-[#272b38] hover:bg-[#161a23] transition-all">
-                                    Undo
-                                  </button>
-                                </form>
+                          <div className="flex flex-col items-end gap-1">
+                            <div className="text-right mb-0.5">
+                              <p className="font-bold text-xs sm:text-sm text-slate-400 tracking-tight">Net Statement: RM {statementTotalDue.toLocaleString('en-MY', { minimumFractionDigits: 2 })}</p>
+                              {debtIsPaidThisMonth && (
+                                <p className="text-[9px] font-bold text-teal-400 uppercase tracking-widest mt-0.5">Total Paid: RM {actualAmountPaid.toFixed(2)}</p>
                               )}
                             </div>
-                          ) : (
-                            <div className="flex flex-col items-end gap-1">
-                              <div className="text-right mb-0.5">
-                                <p className="font-bold text-xs sm:text-sm text-slate-400 tracking-tight">Net Statement: RM {statementTotalDue.toLocaleString('en-MY', { minimumFractionDigits: 2 })}</p>
-                              </div>
-                              {isReadOnly ? (
-                                <span className="text-[8px] sm:text-[9px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-full border bg-[#0b0e14] text-[#8a93a6] border-[#272b38]">
-                                  Outstanding
-                                </span>
-                              ) : (
-                                <form action={toggleDebt} className="flex items-center gap-1.5 sm:gap-2">
+                            {isReadOnly ? (
+                              <span className={`text-[8px] sm:text-[9px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-full border bg-[#0b0e14] ${debtIsPaidThisMonth ? 'text-teal-400 border-teal-500/20' : 'text-[#8a93a6] border-[#272b38]'}`}>
+                                {debtIsPaidThisMonth ? 'Paid' : 'Outstanding'}
+                              </span>
+                            ) : (
+                              <div className="flex items-center gap-1.5 sm:gap-2">
+                                {debtIsPaidThisMonth && (
+                                  <form action={undoDebtPayment}>
+                                    <input type="hidden" name="id" value={debt.id} />
+                                    <input type="hidden" name="monthId" value={currentMonthId} />
+                                    <button type="submit" className="text-[8px] sm:text-[9px] font-bold uppercase tracking-widest px-3 py-2 bg-[#0b0e14] text-[#8a93a6] border border-[#272b38] hover:bg-[#161a23] rounded-lg transition-all" title="Undo All Payments">
+                                      Undo
+                                    </button>
+                                  </form>
+                                )}
+                                <form action={payDebt} className="flex items-center gap-1.5 sm:gap-2">
                                   <input type="hidden" name="id" value={debt.id} />
                                   <input type="hidden" name="monthId" value={currentMonthId} />
-                                  <input type="hidden" name="isPaid" value="false" />
                                   <div className="flex items-center bg-[#0b0e14] border border-[#272b38] rounded-lg p-0.5 focus-within:border-amber-500/50 transition-colors">
                                     <span className="text-[#8a93a6] text-[10px] pl-2 font-mono">RM</span>
                                     <input 
                                       type="number" 
                                       step="0.01" 
                                       name="amountPaid" 
-                                      defaultValue={statementTotalDue > 0 ? statementTotalDue.toFixed(2) : '0.00'} 
-                                      className="w-16 sm:w-24 bg-transparent text-right text-white text-xs outline-none py-1 px-1.5 font-mono"
+                                      defaultValue={Math.max(0, statementTotalDue - (debtIsPaidThisMonth ? actualAmountPaid : 0)).toFixed(2)} 
+                                      className="w-16 sm:w-20 lg:w-24 bg-transparent text-right text-white text-xs outline-none py-1 px-1.5 font-mono"
                                     />
                                   </div>
                                   <button type="submit" className="text-[8px] sm:text-[9px] font-bold uppercase tracking-widest px-3 py-2 bg-amber-500/10 text-amber-400 border border-amber-500/40 hover:bg-amber-500/20 rounded-lg transition-all whitespace-nowrap">
-                                    Pay Now
+                                    {debtIsPaidThisMonth ? '+ Add' : 'Pay Now'}
                                   </button>
                                 </form>
-                              )}
-                            </div>
-                          )}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
                       
