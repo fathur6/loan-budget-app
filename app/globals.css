@@ -24,3 +24,17 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Shrink the entire UI by about 12.5% on standard mobile screens */
+@media (max-width: 640px) {
+  html {
+    font-size: 14px; 
+  }
+}
+
+/* Shrink it a bit more for smaller phone screens */
+@media (max-width: 380px) {
+  html {
+    font-size: 13px; 
+  }
+}
