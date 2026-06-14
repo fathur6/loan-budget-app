@@ -703,6 +703,11 @@ export default async function Home(props: any = {}) {
   const pctBudgets = totalMonthlyFlow > 0 ? (monthlyBudgetsFlow / totalMonthlyFlow) * 100 : 0;
   const pctBskl = totalMonthlyFlow > 0 ? (monthlyBsklFlow / totalMonthlyFlow) * 100 : 0;
 
+  // --- NET CASH REQUIRED MATH ---
+  const reqTotal = totalBudgetsAllocatedThisMonth + baseMonthlyLoanTotal;
+  const reqPctBudget = reqTotal > 0 ? (totalBudgetsAllocatedThisMonth / reqTotal) * 100 : 0;
+  const reqPctLoan = reqTotal > 0 ? (baseMonthlyLoanTotal / reqTotal) * 100 : 0;
+
   const formattedMonthDisplay = new Date(currentSelectedMonth + 'T00:00:00').toLocaleDateString('en-MY', {
     month: 'long',
     year: 'numeric',
@@ -1008,7 +1013,7 @@ export default async function Home(props: any = {}) {
             <div className="bg-[#161a23] border border-[#272b38] rounded-2xl p-5 sm:p-6 md:p-8 flex flex-col justify-between group hover:border-[#383e52] transition-colors">
               <div>
                 <p className="text-[10px] sm:text-[11px] text-[#8a93a6] font-semibold uppercase tracking-[0.15em] mb-2">Net Cash Required</p>
-                <div className="flex justify-between items-center mb-3">
+                <div className="flex items-center gap-3 mb-3">
                   <p className="text-2xl sm:text-3xl md:text-4xl font-bold text-white tracking-tight">
                     RM {totalRemainingBalance.toLocaleString('en-MY', { minimumFractionDigits: 2 })}
                   </p>
@@ -1016,15 +1021,24 @@ export default async function Home(props: any = {}) {
                     <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                   </a>
                 </div>
-                <div className="space-y-1.5 text-[#8a93a6] text-[9px] sm:text-[10px] border-t border-[#272b38]/50 pt-3 mt-3">
-                  <div className="flex items-center gap-2">
-                    <span className="uppercase tracking-widest font-bold w-14">Budget:</span> 
-                    <span className="font-mono text-white">RM {totalBudgetsAllocatedThisMonth.toLocaleString('en-MY', { minimumFractionDigits: 2 })}</span>
+                
+                <div className="flex justify-between items-center border-t border-[#272b38]/50 pt-3 mt-3">
+                  <div className="space-y-1.5 text-[#8a93a6] text-[9px] sm:text-[10px]">
+                    <div className="flex items-center gap-2">
+                      <span className="uppercase tracking-widest font-bold w-14">Budget:</span> 
+                      <span className="font-mono text-white">RM {totalBudgetsAllocatedThisMonth.toLocaleString('en-MY', { minimumFractionDigits: 2 })}</span>
+                      <span className="text-teal-400 font-bold ml-1">{reqPctBudget.toFixed(0)}%</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="uppercase tracking-widest font-bold w-14">Loan:</span> 
+                      <span className="font-mono text-white">RM {baseMonthlyLoanTotal.toLocaleString('en-MY', { minimumFractionDigits: 2 })}</span>
+                      <span className="text-amber-400 font-bold ml-1">{reqPctLoan.toFixed(0)}%</span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="uppercase tracking-widest font-bold w-14">Loan:</span> 
-                    <span className="font-mono text-white">RM {baseMonthlyLoanTotal.toLocaleString('en-MY', { minimumFractionDigits: 2 })}</span>
-                  </div>
+                  <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full shadow-[0_0_15px_rgba(45,212,191,0.25)] flex-shrink-0 ml-2" style={{
+                    background: reqTotal > 0 ? `conic-gradient(#2dd4bf 0% ${reqPctBudget}%, #fbbf24 ${reqPctBudget}% 100%)` : 'transparent',
+                    border: reqTotal === 0 ? '1px solid #272b38' : 'none'
+                  }}></div>
                 </div>
               </div>
               <div className="mt-6 sm:mt-8">
@@ -1055,17 +1069,10 @@ export default async function Home(props: any = {}) {
                   <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-teal-400"></span><span className="text-[8px] sm:text-[9px] text-white uppercase tracking-widest">Budgets <span className="text-[#8a93a6] ml-1">{pctBudgets.toFixed(0)}%</span></span></div>
                   <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-blue-400"></span><span className="text-[8px] sm:text-[9px] text-white uppercase tracking-widest">Trades <span className="text-[#8a93a6] ml-1">{pctBskl.toFixed(0)}%</span></span></div>
                 </div>
-                <div className="relative w-16 h-16 sm:w-20 sm:h-20 flex-shrink-0 mr-2 drop-shadow-[0_0_10px_rgba(0,0,0,0.5)]">
-                  <svg className="w-full h-full transform -rotate-90 rounded-full" viewBox="0 0 36 36">
-                    <circle cx="18" cy="18" r="15.9155" fill="transparent" stroke="#272b38" strokeWidth="6"></circle>
-                    {totalMonthlyFlow > 0 && (
-                      <>
-                        {pctLoans > 0 && <circle cx="18" cy="18" r="15.9155" fill="transparent" stroke="#fbbf24" strokeWidth="6" strokeDasharray={`${pctLoans} ${100 - pctLoans}`} strokeDashoffset="0" className="transition-all duration-1000 ease-out"></circle>}
-                        {pctBudgets > 0 && <circle cx="18" cy="18" r="15.9155" fill="transparent" stroke="#2dd4bf" strokeWidth="6" strokeDasharray={`${pctBudgets} ${100 - pctBudgets}`} strokeDashoffset={`-${pctLoans}`} className="transition-all duration-1000 ease-out"></circle>}
-                        {pctBskl > 0 && <circle cx="18" cy="18" r="15.9155" fill="transparent" stroke="#60a5fa" strokeWidth="6" strokeDasharray={`${pctBskl} ${100 - pctBskl}`} strokeDashoffset={`-${pctLoans + pctBudgets}`} className="transition-all duration-1000 ease-out"></circle>}
-                      </>
-                    )}
-                  </svg>
+                <div className="relative w-16 h-16 sm:w-20 sm:h-20 flex-shrink-0 mr-2 rounded-full shadow-[0_0_20px_rgba(45,212,191,0.25)]" style={{
+                  background: totalMonthlyFlow > 0 ? `conic-gradient(#fbbf24 0% ${pctLoans}%, #2dd4bf ${pctLoans}% ${pctLoans + pctBudgets}%, #60a5fa ${pctLoans + pctBudgets}% 100%)` : 'transparent',
+                  border: totalMonthlyFlow === 0 ? '1px solid #272b38' : 'none'
+                }}>
                 </div>
               </div>
 
