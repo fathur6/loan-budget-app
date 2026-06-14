@@ -1253,13 +1253,13 @@ export default async function Home(props: any = {}) {
                               </span>
                             )}
                           </div>
-                          {!debtIsPaidThisMonth && (
-                            <div className="text-[10px] sm:text-[11px] text-[#8a93a6] font-medium space-y-0.5 sm:space-y-1">
-                              <p>Base: RM {n(debt.monthly_due).toFixed(2)}</p>
-                              {currentArrears > 0 && <p className="text-rose-400">Arrears: +RM {currentArrears.toFixed(2)}</p>}
-                              {n(debt.float_balance) > 0 && <p className="text-teal-400">Credit: -RM {n(debt.float_balance).toFixed(2)}</p>}
-                            </div>
-                          )}
+                          
+                          <div className="text-[10px] sm:text-[11px] text-[#8a93a6] font-medium space-y-0.5 sm:space-y-1">
+                            <p>Base: RM {n(debt.monthly_due).toFixed(2)}</p>
+                            {currentArrears > 0 && <p className="text-rose-400">Arrears: +RM {currentArrears.toFixed(2)}</p>}
+                            {n(debt.float_balance) > 0 && <p className="text-teal-400">Credit: -RM {n(debt.float_balance).toFixed(2)}</p>}
+                          </div>
+                          
                           <a href={`?month=${currentSelectedMonth}${isExpanded ? '' : `&details=${debt.id}`}${isEditing ? '&edit=true' : ''}`} className="text-[9px] sm:text-[10px] text-teal-400 hover:text-teal-300 mt-2 inline-block transition-colors uppercase tracking-widest font-bold">{isExpanded ? 'Hide ▲' : 'Details ▼'}</a>
                         </div>
 
