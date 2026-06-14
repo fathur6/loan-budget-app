@@ -651,6 +651,16 @@ export default async function Home(props: any = {}) {
   const yearlyTotalPaid = yearlyTotalBudgetCleared + yearlyPaidLoans + totalBsklRepaidAllTime;
   const yearlyProgressPercentage = yearlyTotalAllocated > 0 ? Math.min(100, (yearlyTotalPaid / yearlyTotalAllocated) * 100) : 0
 
+  // --- MONTHLY SPLIT CHART MATH ---
+  const monthlyLoansFlow = paidLoansStatementTotal;
+  const monthlyBudgetsFlow = totalBudgetsAllocatedThisMonth;
+  const monthlyBsklFlow = totalBsklCapitalOutflowThisMonth;
+  const totalMonthlyFlow = monthlyLoansFlow + monthlyBudgetsFlow + monthlyBsklFlow;
+
+  const pctLoans = totalMonthlyFlow > 0 ? (monthlyLoansFlow / totalMonthlyFlow) * 100 : 0;
+  const pctBudgets = totalMonthlyFlow > 0 ? (monthlyBudgetsFlow / totalMonthlyFlow) * 100 : 0;
+  const pctBskl = totalMonthlyFlow > 0 ? (monthlyBsklFlow / totalMonthlyFlow) * 100 : 0;
+
   const formattedMonthDisplay = new Date(currentSelectedMonth + 'T00:00:00').toLocaleDateString('en-MY', {
     month: 'long',
     year: 'numeric',
@@ -981,33 +991,57 @@ export default async function Home(props: any = {}) {
               </div>
             </div>
 
-            {/* 3. YEAR-TO-DATE TRACKING */}
-            <div className="bg-[#161a23] border border-[#272b38] rounded-2xl p-5 sm:p-6 md:p-8 flex flex-col justify-between group hover:border-[#383e52] transition-colors">
+            {/* 3. MONTHLY SPLIT & YEAR-TO-DATE TRACKING */}
+            <div className="bg-[#161a23] border border-[#272b38] rounded-2xl p-5 sm:p-6 md:p-8 flex flex-col justify-between group hover:border-[#383e52] transition-colors gap-6">
+              
+              {/* Monthly Split Pie Chart */}
               <div className="flex justify-between items-center">
-                <div className="space-y-1">
-                  <p className="text-[10px] sm:text-[11px] text-[#8a93a6] font-semibold uppercase tracking-[0.15em]">Year-To-Date</p>
-                  <p className="text-xl sm:text-2xl md:text-3xl font-bold text-white tracking-tight">
-                    RM {yearlyTotalPaid.toLocaleString('en-MY', { minimumFractionDigits: 2 })}
-                  </p>
-                  <p className="text-[9px] text-[#8a93a6] tracking-wider uppercase">
-                    TARGET <span className="text-white font-mono">{yearlyTotalAllocated.toLocaleString('en-MY', { minimumFractionDigits: 2 })}</span>
-                  </p>
+                <div className="space-y-2">
+                  <p className="text-[10px] sm:text-[11px] text-[#8a93a6] font-semibold uppercase tracking-[0.15em] mb-2">Monthly Flow</p>
+                  <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-amber-400"></span><span className="text-[8px] sm:text-[9px] text-white uppercase tracking-widest">Loans <span className="text-[#8a93a6] ml-1">{pctLoans.toFixed(0)}%</span></span></div>
+                  <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-teal-400"></span><span className="text-[8px] sm:text-[9px] text-white uppercase tracking-widest">Budgets <span className="text-[#8a93a6] ml-1">{pctBudgets.toFixed(0)}%</span></span></div>
+                  <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-blue-400"></span><span className="text-[8px] sm:text-[9px] text-white uppercase tracking-widest">Trades <span className="text-[#8a93a6] ml-1">{pctBskl.toFixed(0)}%</span></span></div>
                 </div>
-                <div className="relative w-14 h-14 sm:w-16 sm:h-16 md:w-20 md:h-20 flex-shrink-0 ml-2">
-                  <svg className="w-full h-full transform -rotate-90 drop-shadow-[0_0_8px_rgba(45,212,191,0.3)]" viewBox="0 0 36 36">
-                    <circle cx="18" cy="18" r="15.9155" fill="transparent" stroke="#272b38" strokeWidth="4"></circle>
-                    <circle cx="18" cy="18" r="15.9155" fill="transparent" stroke="currentColor" strokeWidth="4" 
-                      strokeDasharray={`${yearlyProgressPercentage}, 100`} strokeLinecap="round" 
-                      className="text-teal-400 transition-all duration-1000 ease-out">
-                    </circle>
+                <div className="relative w-16 h-16 sm:w-20 sm:h-20 flex-shrink-0 mr-2 drop-shadow-[0_0_10px_rgba(0,0,0,0.5)]">
+                  <svg className="w-full h-full transform -rotate-90 rounded-full" viewBox="0 0 36 36">
+                    <circle cx="18" cy="18" r="15.9155" fill="transparent" stroke="#272b38" strokeWidth="6"></circle>
+                    {totalMonthlyFlow > 0 && (
+                      <>
+                        {pctLoans > 0 && <circle cx="18" cy="18" r="15.9155" fill="transparent" stroke="#fbbf24" strokeWidth="6" strokeDasharray={`${pctLoans} ${100 - pctLoans}`} strokeDashoffset="0" className="transition-all duration-1000 ease-out"></circle>}
+                        {pctBudgets > 0 && <circle cx="18" cy="18" r="15.9155" fill="transparent" stroke="#2dd4bf" strokeWidth="6" strokeDasharray={`${pctBudgets} ${100 - pctBudgets}`} strokeDashoffset={`-${pctLoans}`} className="transition-all duration-1000 ease-out"></circle>}
+                        {pctBskl > 0 && <circle cx="18" cy="18" r="15.9155" fill="transparent" stroke="#60a5fa" strokeWidth="6" strokeDasharray={`${pctBskl} ${100 - pctBskl}`} strokeDashoffset={`-${pctLoans + pctBudgets}`} className="transition-all duration-1000 ease-out"></circle>}
+                      </>
+                    )}
                   </svg>
-                  <div className="absolute inset-0 flex items-center justify-center flex-col">
-                    <span className="text-xs sm:text-sm font-bold text-white leading-none tracking-tight">{yearlyProgressPercentage.toFixed(0)}%</span>
-                  </div>
                 </div>
               </div>
-              <div className="mt-4 border-t border-[#272b38]/50 pt-3">
-                 <p className="text-[9px] sm:text-[10px] text-[#8a93a6] tracking-wider leading-relaxed">Total structural volume cleared & pooled across all logged cycles.</p>
+
+              {/* YTD Data (Pushed closer to footnote) */}
+              <div className="border-t border-[#272b38]/50 pt-4 mt-auto">
+                <div className="flex justify-between items-end mb-3">
+                  <div className="space-y-1">
+                    <p className="text-[9px] sm:text-[10px] text-[#8a93a6] font-semibold uppercase tracking-[0.15em]">Year-To-Date</p>
+                    <p className="text-xl sm:text-2xl font-bold text-white tracking-tight">
+                      RM {yearlyTotalPaid.toLocaleString('en-MY', { minimumFractionDigits: 2 })}
+                    </p>
+                    <p className="text-[8px] sm:text-[9px] text-[#8a93a6] tracking-wider uppercase">
+                      TARGET <span className="text-white font-mono">{yearlyTotalAllocated.toLocaleString('en-MY', { minimumFractionDigits: 2 })}</span>
+                    </p>
+                  </div>
+                  <div className="relative w-10 h-10 sm:w-12 sm:h-12 flex-shrink-0">
+                    <svg className="w-full h-full transform -rotate-90 drop-shadow-[0_0_6px_rgba(45,212,191,0.2)]" viewBox="0 0 36 36">
+                      <circle cx="18" cy="18" r="15.9155" fill="transparent" stroke="#272b38" strokeWidth="4"></circle>
+                      <circle cx="18" cy="18" r="15.9155" fill="transparent" stroke="currentColor" strokeWidth="4" 
+                        strokeDasharray={`${yearlyProgressPercentage}, 100`} strokeLinecap="round" 
+                        className="text-teal-400 transition-all duration-1000 ease-out">
+                      </circle>
+                    </svg>
+                    <div className="absolute inset-0 flex items-center justify-center flex-col">
+                      <span className="text-[8px] sm:text-[10px] font-bold text-white leading-none tracking-tight">{yearlyProgressPercentage.toFixed(0)}%</span>
+                    </div>
+                  </div>
+                </div>
+                <p className="text-[8px] text-[#8a93a6] tracking-wider leading-relaxed">Total structural volume cleared & pooled across all logged cycles.</p>
               </div>
             </div>
 
