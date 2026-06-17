@@ -1,9 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: 'export', // INI WAJIB UNTUK MENGHASILKAN FOLDER 'out'
-  images: { 
-    unoptimized: true 
-  },
+  // Gunakan 'output: export' HANYA jika variable ada, jika tidak, biarkan Vercel urus
+  output: process.env.NEXT_PUBLIC_IS_CAPACITOR === 'true' ? 'export' : undefined,
+  images: { unoptimized: true },
 };
-
 export default nextConfig;
