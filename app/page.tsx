@@ -1,614 +1,462 @@
-// ---------- SERVER ACTIONS ----------
+'use client';
 
-// --- Perpetual Debt Tracking Actions ---
-async function payDebt(formData: FormData) {
-  'use server'
-  const supabasePath = "./supabase"
-  const cachePath = "next/cache"
-  const { supabase } = await import(supabasePath)
-  const { revalidatePath } = await import(cachePath)
-  
-  const debtId = formData.get('id') as string
-  const monthId = formData.get('monthId') as string
-  const amountPaid = Number(formData.get('amountPaid') ?? 0)
-  
-  if (amountPaid <= 0) return;
+import { useState, useEffect } from 'react';
+import { createClient } from '@supabase/supabase-js';
 
-  const { data: existing } = await supabase.from('debt_payments').select('*').match({ debt_id: debtId, paid_month: monthId }).single()
-  
-  if (existing) {
-    // Tambah nilai pada bayaran sedia ada
-    await supabase.from('debt_payments').update({ amount_paid: Number(existing.amount_paid ?? 0) + amountPaid }).match({ debt_id: debtId, paid_month: monthId })
-  } else {
-    // Masukkan rekod bayaran baharu
-    await supabase.from('debt_payments').insert({ 
-      debt_id: debtId, 
-      paid_month: monthId,
-      amount_paid: amountPaid
-    })
-  }
-  revalidatePath('/')
-}
+// Inisialisasi Supabase secara langsung di sisi klien untuk memastikan keserasian binaan statik Capacitor
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-async function undoDebtPayment(formData: FormData) {
-  'use server'
-  const supabasePath = "./supabase"
-  const cachePath = "next/cache"
-  const { supabase } = await import(supabasePath)
-  const { revalidatePath } = await import(cachePath)
-  
-  const debtId = formData.get('id') as string
-  const monthId = formData.get('monthId') as string
-  
-  await supabase.from('debt_payments').delete().match({ debt_id: debtId, paid_month: monthId })
-  revalidatePath('/')
-}
+export default function Home() {
+  const [currentSelectedMonth, setCurrentSelectedMonth] = useState('2026-06-01');
+  const [expandedDebtId, setExpandedDebtId] = useState<string | null>(null);
+  const [bsklModalDate, setBsklModalDate] = useState<string | null>(null);
+  const [isLogOpen, setIsLogOpen] = useState(false);
+  const [editLogId, setEditLogId] = useState<string | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [isReadOnly, setIsReadOnly] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-async function updateDebtBalances(formData: FormData) {
-  'use server'
-  const supabasePath = "./supabase"
-  const cachePath = "next/cache"
-  const { supabase } = await import(supabasePath)
-  const { revalidatePath } = await import(cachePath)
+  // --- DATA STATES ---
+  const [debts, setDebts] = useState<any[]>([]);
+  const [allDebtPayments, setAllDebtPayments] = useState<any[]>([]);
+  const [budgets, setBudgets] = useState<any[]>([]);
+  const [allBudgetsOfYear, setAllBudgetsOfYear] = useState<any[]>([]);
+  const [transfers, setTransfers] = useState<any[]>([]);
+  const [bsklContracts, setBsklContracts] = useState<any[]>([]);
+  const [bsklPayments, setBsklPayments] = useState<any[]>([]);
+  const [bsklHolidays, setBsklHolidays] = useState<any[]>([]);
+  const [currentSalary, setCurrentSalary] = useState(0);
+  const [budgetTransactions, setBudgetTransactions] = useState<any[]>([]);
+  const [cashInflows, setCashInflows] = useState<any[]>([]);
 
-  const id = formData.get('id') as string
-  const creditor = formData.get('creditor') as string
-  const arrears = Number(formData.get('arrears') ?? 0)
-  const float = Number(formData.get('float') ?? 0)
-  const monthly_due = Number(formData.get('monthly_due') ?? 0)
-  const original_loan_amount = Number(formData.get('original_loan_amount') ?? 0)
-  const total_debt_amount = Number(formData.get('total_debt_amount') ?? 0)
+  const n = (v: any) => Number(v ?? 0);
+  const currentMonthId = currentSelectedMonth.substring(0, 7);
 
-  let start_date = formData.get('start_date') as string || null;
-  let end_date = formData.get('end_date') as string || null;
-  let financing_tenure = Number(formData.get('financing_tenure')) || null;
-
-  // Auto-calculate Tenure based on Limit/Base if missing
-  if (!financing_tenure && monthly_due > 0 && original_loan_amount > 0) {
-      financing_tenure = Math.ceil(original_loan_amount / monthly_due);
-  }
-  
-  // Auto-calculate End Date based on Start Date + Tenure if missing
-  if (start_date && financing_tenure && !end_date) {
-      const d = new Date(start_date);
-      d.setMonth(d.getMonth() + financing_tenure);
-      end_date = d.toISOString().split('T')[0];
-  }
-
-  await supabase.from('debts').update({ 
-    creditor, 
-    arrears_balance: arrears, 
-    float_balance: float,
-    monthly_due,
-    original_loan_amount,
-    total_debt_amount,
-    start_date,
-    end_date,
-    financing_tenure
-  }).eq('id', id)
-  revalidatePath('/')
-}
-
-async function addDebt(formData: FormData) {
-  'use server'
-  const supabasePath = "./supabase"
-  const cachePath = "next/cache"
-  const { supabase } = await import(supabasePath)
-  const { revalidatePath } = await import(cachePath)
-
-  const creditor = formData.get('creditor') as string
-  const monthly_due = Number(formData.get('monthly_due') ?? 0)
-  const original_loan_amount = Number(formData.get('original_loan_amount') ?? 0)
-
-  let start_date = formData.get('start_date') as string || null;
-  let end_date = formData.get('end_date') as string || null;
-  let financing_tenure = Number(formData.get('financing_tenure')) || null;
-
-  if (!financing_tenure && monthly_due > 0 && original_loan_amount > 0) {
-      financing_tenure = Math.ceil(original_loan_amount / monthly_due);
-  }
-  if (start_date && financing_tenure && !end_date) {
-      const d = new Date(start_date);
-      d.setMonth(d.getMonth() + financing_tenure);
-      end_date = d.toISOString().split('T')[0];
-  }
-  
-  await supabase.from('debts').insert({ 
-    creditor, 
-    monthly_due, 
-    original_loan_amount,
-    total_debt_amount: original_loan_amount,
-    arrears_balance: 0, 
-    float_balance: 0,
-    is_paid: false,
-    start_date,
-    end_date,
-    financing_tenure
-  })
-  revalidatePath('/')
-}
-
-async function removeDebt(formData: FormData) {
-  'use server'
-  const supabasePath = "./supabase"
-  const cachePath = "next/cache"
-  const { supabase } = await import(supabasePath)
-  const { revalidatePath } = await import(cachePath)
-
-  const id = formData.get('id') as string
-  await supabase.from('debts').delete().eq('id', id)
-  revalidatePath('/')
-}
-
-async function removeBudget(formData: FormData) {
-  'use server'
-  const supabasePath = "./supabase"
-  const cachePath = "next/cache"
-  const { supabase } = await import(supabasePath)
-  const { revalidatePath } = await import(cachePath)
-
-  const id = formData.get('id') as string
-  await supabase.from('budgets').delete().eq('id', id)
-  revalidatePath('/')
-}
-
-// --- Dynamic Budget Transaction & Virement Sub-Actions ---
-async function executeBudgetAction(formData: FormData) {
-  'use server'
-  const supabasePath = "./supabase"
-  const cachePath = "next/cache"
-  const { supabase } = await import(supabasePath)
-  const { revalidatePath } = await import(cachePath)
-
-  const budgetId = formData.get('budgetId') as string
-  const amount = Number(formData.get('amount') ?? 0)
-  const actionType = formData.get('actionType') as string // 'spent', 'add', 'reduce'
-  const currentAllocated = Number(formData.get('currentAllocated') ?? 0)
-  const currentSpent = Number(formData.get('currentSpent') ?? 0)
-
-  if (amount <= 0 || !budgetId) return
-
-  // 1. Log the transaction in the sub-ledger
-  await supabase.from('budget_transactions').insert({
-    budget_id: budgetId,
-    amount: amount,
-    transaction_type: actionType
-  })
-
-  // 2. Perform math modifications based on tactical selection
-  if (actionType === 'spent') {
-    const newSpent = currentSpent + amount
-    await supabase.from('budgets').update({ spent_amount: newSpent }).eq('id', budgetId)
-  } else if (actionType === 'add') {
-    const newAllocation = currentAllocated + amount
-    await supabase.from('budgets').update({ allocated_amount: newAllocation }).eq('id', budgetId)
-  } else if (actionType === 'reduce') {
-    const newAllocation = Math.max(0, currentAllocated - amount)
-    await supabase.from('budgets').update({ allocated_amount: newAllocation }).eq('id', budgetId)
-  }
-
-  revalidatePath('/')
-}
-
-// --- Direct Pool Cash Inflow Actions ---
-async function addCashInflow(formData: FormData) {
-  'use server'
-  const supabasePath = "./supabase"
-  const cachePath = "next/cache"
-  const { supabase } = await import(supabasePath)
-  const { revalidatePath } = await import(cachePath)
-
-  const monthId = formData.get('monthId') as string
-  const particular = formData.get('particular') as string
-  const amount = Number(formData.get('amount') ?? 0)
-
-  if (amount <= 0 || !particular) return
-
-  await supabase.from('cash_inflows').insert({
-    month_id: monthId,
-    particular: particular,
-    amount: amount
-  })
-
-  revalidatePath('/')
-}
-
-// --- Centralized Ledger Amend & Delete Log Actions ---
-async function deleteLogEntry(formData: FormData) {
-  'use server'
-  const supabasePath = "./supabase"
-  const cachePath = "next/cache"
-  const { supabase } = await import(supabasePath)
-  const { revalidatePath } = await import(cachePath)
-  
-  const id = formData.get('id') as string;
-  const source = formData.get('source') as string;
-  
-  if (source === 'budget') {
-    const { data: trx } = await supabase.from('budget_transactions').select('*').eq('id', id).single();
-    if (trx) {
-       const { data: b } = await supabase.from('budgets').select('*').eq('id', trx.budget_id).single();
-       if (b) {
-         if (trx.transaction_type === 'spent') {
-            await supabase.from('budgets').update({ spent_amount: Number(b.spent_amount) - Number(trx.amount) }).eq('id', b.id);
-         } else if (trx.transaction_type === 'add') {
-            await supabase.from('budgets').update({ allocated_amount: Number(b.allocated_amount) - Number(trx.amount) }).eq('id', b.id);
-         } else if (trx.transaction_type === 'reduce') {
-            await supabase.from('budgets').update({ allocated_amount: Number(b.allocated_amount) + Number(trx.amount) }).eq('id', b.id);
-         }
-       }
-       await supabase.from('budget_transactions').delete().eq('id', id);
-    }
-  } else if (source === 'transfer') {
-    await supabase.from('liquidity_transfers').delete().eq('id', id);
-  } else if (source === 'inflow') {
-    await supabase.from('cash_inflows').delete().eq('id', id);
-  } else if (source === 'debt') {
-    const debt_id = formData.get('raw_debt_id') as string;
-    const paid_month = formData.get('raw_paid_month') as string;
-    await supabase.from('debt_payments').delete().match({ debt_id, paid_month });
-  } else if (source === 'bskl') {
-    const contract_id = formData.get('raw_contract_id') as string;
-    const paid_date = formData.get('raw_paid_date') as string;
-    await supabase.from('bskl_payments').delete().match({ contract_id, paid_date });
-  }
-  
-  revalidatePath('/')
-}
-
-async function amendLogEntry(formData: FormData) {
-  'use server'
-  const supabasePath = "./supabase"
-  const cachePath = "next/cache"
-  const { supabase } = await import(supabasePath)
-  const { revalidatePath } = await import(cachePath)
-  
-  const id = formData.get('id') as string;
-  const source = formData.get('source') as string;
-  const newAmount = Number(formData.get('amount') ?? 0);
-  
-  if (source === 'budget' && newAmount >= 0) {
-    const { data: trx } = await supabase.from('budget_transactions').select('*').eq('id', id).single();
-    if (trx) {
-       const diff = newAmount - Number(trx.amount);
-       const { data: b } = await supabase.from('budgets').select('*').eq('id', trx.budget_id).single();
-       if (b) {
-         if (trx.transaction_type === 'spent') {
-            await supabase.from('budgets').update({ spent_amount: Number(b.spent_amount) + diff }).eq('id', b.id);
-         } else if (trx.transaction_type === 'add') {
-            await supabase.from('budgets').update({ allocated_amount: Number(b.allocated_amount) + diff }).eq('id', b.id);
-         } else if (trx.transaction_type === 'reduce') {
-            await supabase.from('budgets').update({ allocated_amount: Number(b.allocated_amount) - diff }).eq('id', b.id);
-         }
-       }
-       await supabase.from('budget_transactions').update({ amount: newAmount }).eq('id', id);
-    }
-  } else if (source === 'transfer' && newAmount >= 0) {
-    await supabase.from('liquidity_transfers').update({ amount: newAmount }).eq('id', id);
-  } else if (source === 'inflow' && newAmount >= 0) {
-    await supabase.from('cash_inflows').update({ amount: newAmount }).eq('id', id);
-  }
-  revalidatePath('/')
-}
-
-async function updateBudgetSettings(formData: FormData) {
-  'use server'
-  const supabasePath = "./supabase"
-  const cachePath = "next/cache"
-  const { supabase } = await import(supabasePath)
-  const { revalidatePath } = await import(cachePath)
-
-  const id = formData.get('id') as string
-  const category = formData.get('category') as string
-  const allocated = Number(formData.get('allocated') ?? 0)
-  await supabase.from('budgets').update({ category, allocated_amount: allocated }).eq('id', id)
-  revalidatePath('/')
-}
-
-async function sendToSavings(formData: FormData) {
-  'use server'
-  const supabasePath = "./supabase"
-  const cachePath = "next/cache"
-  const { supabase } = await import(supabasePath)
-  const { revalidatePath } = await import(cachePath)
-
-  const id = formData.get('id') as string
-  await supabase.from('budgets').update({ is_saved: true }).eq('id', id)
-  revalidatePath('/')
-}
-
-async function undoSavings(formData: FormData) {
-  'use server'
-  const supabasePath = "./supabase"
-  const cachePath = "next/cache"
-  const { supabase } = await import(supabasePath)
-  const { revalidatePath } = await import(cachePath)
-
-  const id = formData.get('id') as string
-  await supabase.from('budgets').update({ is_saved: false }).eq('id', id)
-  revalidatePath('/')
-}
-
-async function addBudget(formData: FormData) {
-  'use server'
-  const supabasePath = "./supabase"
-  const cachePath = "next/cache"
-  const { supabase } = await import(supabasePath)
-  const { revalidatePath } = await import(cachePath)
-
-  const category = formData.get('category') as string
-  const allocated_amount = Number(formData.get('allocated_amount') ?? 0)
-  const budget_month = formData.get('budget_month') as string
-
-  await supabase.from('budgets').insert({ 
-    category, 
-    allocated_amount, 
-    budget_month,
-    spent_amount: 0,
-    is_saved: false
-  })
-  revalidatePath('/')
-}
-
-async function duplicatePreviousBudgets(formData: FormData) {
-  'use server'
-  const supabasePath = "./supabase"
-  const cachePath = "next/cache"
-  const { supabase } = await import(supabasePath)
-  const { revalidatePath } = await import(cachePath)
-
-  const currentMonth = formData.get('currentMonth') as string;
-  const prevMonth = formData.get('prevMonth') as string;
-
-  const { data: oldBudgets } = await supabase.from('budgets').select('*').eq('budget_month', prevMonth);
-  
-  if (oldBudgets && oldBudgets.length > 0) {
-     const newBudgets = oldBudgets.map((b: any) => ({
-       category: b.category,
-       allocated_amount: b.allocated_amount,
-       budget_month: currentMonth,
-       spent_amount: 0,
-       is_saved: false
-     }));
-     await supabase.from('budgets').insert(newBudgets);
-  }
-  revalidatePath('/');
-}
-
-async function transferFromPool(formData: FormData) {
-  'use server'
-  const supabasePath = "./supabase"
-  const cachePath = "next/cache"
-  const { supabase } = await import(supabasePath)
-  const { revalidatePath } = await import(cachePath)
-
-  const monthId = formData.get('monthId') as string
-  const amount = Number(formData.get('amount') ?? 0)
-  if (amount <= 0) return;
-  
-  await supabase.from('liquidity_transfers').insert({ month_id: monthId, amount })
-  revalidatePath('/')
-}
-
-// --- BSKL Investment Server Actions (Holidays & Contracts) ---
-async function addBsklContract(formData: FormData) {
-  'use server'
-  const supabasePath = "./supabase"
-  const cachePath = "next/cache"
-  const { supabase } = await import(supabasePath)
-  const { revalidatePath } = await import(cachePath)
-
-  const name = formData.get('name') as string
-  const capital = Number(formData.get('capital') ?? 0)
-  const rate = Number(formData.get('rate') ?? 0)
-  const effectiveDate = formData.get('effectiveDate') as string
-
-  await supabase.from('bskl_contracts').insert({
-    name,
-    capital_injection: capital,
-    daily_rate: rate,
-    effective_date: effectiveDate,
-    is_active: true
-  })
-  revalidatePath('/')
-}
-
-async function updateBsklContract(formData: FormData) {
-  'use server'
-  const supabasePath = "./supabase"
-  const cachePath = "next/cache"
-  const { supabase } = await import(supabasePath)
-  const { revalidatePath } = await import(cachePath)
-
-  const id = formData.get('id') as string
-  const name = formData.get('name') as string
-  const capital = Number(formData.get('capital') ?? 0)
-  const rate = Number(formData.get('rate') ?? 0)
-  const effectiveDate = formData.get('effectiveDate') as string
-
-  await supabase.from('bskl_contracts').update({
-    name,
-    capital_injection: capital,
-    daily_rate: rate,
-    effective_date: effectiveDate
-  }).eq('id', id)
-  revalidatePath('/')
-}
-
-async function endBsklContract(formData: FormData) {
-  'use server'
-  const supabasePath = "./supabase"
-  const cachePath = "next/cache"
-  const { supabase } = await import(supabasePath)
-  const { revalidatePath } = await import(cachePath)
-
-  const id = formData.get('id') as string
-  const endDate = new Date().toISOString().split('T')[0] 
-  
-  await supabase.from('bskl_contracts').update({ 
-    is_active: false, 
-    end_date: endDate 
-  }).eq('id', id)
-  revalidatePath('/')
-}
-
-async function toggleBsklPayment(formData: FormData) {
-  'use server'
-  const supabasePath = "./supabase"
-  const cachePath = "next/cache"
-  const { supabase } = await import(supabasePath)
-  const { revalidatePath } = await import(cachePath)
-
-  const contractId = formData.get('contract_id') as string
-  const dateStr = formData.get('date') as string
-  const amount = Number(formData.get('amount') ?? 0)
-  const isPaid = formData.get('isPaid') === 'true'
-  
-  if (isPaid) {
-    await supabase.from('bskl_payments').delete().match({ contract_id: contractId, paid_date: dateStr })
-  } else {
-    await supabase.from('bskl_payments').insert({ contract_id: contractId, paid_date: dateStr, amount })
-  }
-  revalidatePath('/')
-}
-
-async function addBsklHoliday(formData: FormData) {
-  'use server'
-  const supabasePath = "./supabase"
-  const cachePath = "next/cache"
-  const { supabase } = await import(supabasePath)
-  const { revalidatePath } = await import(cachePath)
-
-  const dateStr = formData.get('date') as string
-  const description = formData.get('description') as string
-  await supabase.from('bskl_holidays').insert({ holiday_date: dateStr, description })
-  revalidatePath('/')
-}
-
-async function removeBsklHoliday(formData: FormData) {
-  'use server'
-  const supabasePath = "./supabase"
-  const cachePath = "next/cache"
-  const { supabase } = await import(supabasePath)
-  const { revalidatePath } = await import(cachePath)
-
-  const id = formData.get('id') as string
-  await supabase.from('bskl_holidays').delete().eq('id', id)
-  revalidatePath('/')
-}
-
-// --- Checking Account / Salary Server Actions ---
-async function updateSalary(formData: FormData) {
-  'use server'
-  const supabasePath = "./supabase"
-  const cachePath = "next/cache"
-  const { supabase } = await import(supabasePath)
-  const { revalidatePath } = await import(cachePath)
-
-  const monthId = formData.get('monthId') as string
-  const amount = Number(formData.get('amount') ?? 0)
-  await supabase.from('monthly_salary').upsert({ month_id: monthId, salary_amount: amount })
-  revalidatePath('/')
-}
-
-// ---------- MAIN PAGE COMPONENT ----------
-export default async function Home(props: any = {}) {
-  const resolvedParams = props && props.searchParams ? props.searchParams : {};
-  let sp: any = {};
-  if (resolvedParams) {
+  // --- FETCH DATA DIRECTLY FROM CLIENT ---
+  const fetchData = async (monthStr: string) => {
+    const monthId = monthStr.substring(0, 7);
     try {
-      sp = typeof resolvedParams.then === 'function' ? await resolvedParams : resolvedParams;
-    } catch (e) {
-      sp = {};
-    }
-  }
-  if (!sp) sp = {};
-
-  const currentSelectedMonth = sp.month || '2026-06-01'
-  const currentMonthId = currentSelectedMonth.substring(0, 7)
-  const expandedDebtId = sp.details
-  const bsklModalDate = sp.bsklModal 
-  const isLogOpen = sp.log === 'true'
-  const editLogId = sp.editLog
-  const n = (v: any) => Number(v ?? 0)
-
-  let isReadOnly = false;
-  let debts: any[] = [];
-  let allDebtPayments: any[] = [];
-  let budgets: any[] = [];
-  let allBudgetsOfYear: any[] = [];
-  let budgetTransactions: any[] = [];
-  let transfers: any[] = [];
-  let bsklContracts: any[] = [];
-  let bsklPayments: any[] = [];
-  let bsklHolidays: any[] = [];
-  let cashInflows: any[] = [];
-  let currentSalary = 0;
-
-  try {
-    const headersPath = "next/headers"
-    const ssrPath = "@supabase/ssr"
-    const supabasePath = "./supabase"
-
-    const modHeaders = await import(headersPath).catch(() => null);
-    const modSsr = await import(ssrPath).catch(() => null);
-    const modSupabase = await import(supabasePath).catch(() => null);
-
-    if (modHeaders && modSsr && modSupabase) {
-      const cookieStore = await modHeaders.cookies()
-      const { createServerClient } = modSsr
-      const { supabase } = modSupabase
-
-      const supabaseServer = createServerClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL || 'dummy',
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'dummy',
-        {
-          cookies: {
-            getAll() { return cookieStore.getAll() },
-          },
-        }
-      )
-
-      const authUserResult = await supabaseServer.auth.getUser().catch(() => ({ data: { user: null } }));
-      const user = authUserResult?.data?.user;
-      isReadOnly = user?.email === 'viewer@financepulse.com'
-
       const [
         { data: d1 }, { data: d2 }, { data: d3 }, { data: d4 }, 
-        { data: d5 }, { data: d6 }, { data: d7 }, { data: d8 }, { data: d9 }, { data: d10 }, { data: d11 }
+        { data: d5 }, { data: d6 }, { data: d7 }, { data: d8 }, { data: d10 }, { data: d11 }
       ] = await Promise.all([
         supabase.from('debts').select('*').order('is_akpk_obligation', { ascending: false }),
         supabase.from('debt_payments').select('*'),
-        supabase.from('budgets').select('*').eq('budget_month', currentSelectedMonth).order('allocated_amount', { ascending: false }),
+        supabase.from('budgets').select('*').eq('budget_month', monthStr).order('allocated_amount', { ascending: false }),
         supabase.from('budgets').select('*'),
         supabase.from('liquidity_transfers').select('*'),
         supabase.from('bskl_contracts').select('*').order('effective_date', { ascending: true }),
         supabase.from('bskl_payments').select('*'),
         supabase.from('bskl_holidays').select('*').order('holiday_date', { ascending: true }),
-        supabase.from('monthly_salary').select('*').eq('month_id', currentMonthId).single(),
         supabase.from('budget_transactions').select('*').order('created_at', { ascending: false }),
         supabase.from('cash_inflows').select('*').order('created_at', { ascending: false })
       ]);
 
-      if (d1) debts = d1;
-      if (d2) allDebtPayments = d2;
-      if (d3) budgets = d3;
-      if (d4) allBudgetsOfYear = d4;
-      if (d5) transfers = d5;
-      if (d6) bsklContracts = d6;
-      if (d7) bsklPayments = d7;
-      if (d8) bsklHolidays = d8;
-      if (d9) currentSalary = Number(d9.salary_amount);
-      if (d10) budgetTransactions = d10;
-      if (d11) cashInflows = d11;
-    }
-  } catch (error) {
-    // Canvas rendering protection
-  }
-  
-  const isEditing = !isReadOnly && sp.edit === 'true'
+      if (d1) setDebts(d1);
+      if (d2) setAllDebtPayments(d2);
+      if (d3) setBudgets(d3);
+      if (d4) setAllBudgetsOfYear(d4);
+      if (d5) setTransfers(d5);
+      if (d6) setBsklContracts(d6);
+      if (d7) setBsklPayments(d7);
+      if (d8) setBsklHolidays(d8);
+      if (d10) setBudgetTransactions(d10);
+      if (d11) setCashInflows(d11);
 
-  // Calendar Engines
+      // Fetch single monthly salary record safely
+      const { data: d9 } = await supabase.from('monthly_salary').select('*').eq('month_id', monthId).single();
+      if (d9) {
+        setCurrentSalary(Number(d9.salary_amount));
+      } else {
+        setCurrentSalary(0);
+      }
+    } catch (error) {
+      console.error("Error fetching database records:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // --- INITIAL CHECK & AUTOMATIC BINDING ---
+  useEffect(() => {
+    const checkSession = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      setIsReadOnly(user?.email === 'viewer@financepulse.com');
+    };
+    checkSession();
+  }, []);
+
+  useEffect(() => {
+    fetchData(currentSelectedMonth);
+  }, [currentSelectedMonth]);
+
+  // ---------- CLIENT SIDE ACTIONS ----------
+
+  const onPayDebt = async (formData: FormData) => {
+    const debtId = formData.get('id') as string;
+    const monthId = formData.get('monthId') as string;
+    const amountPaid = Number(formData.get('amountPaid') ?? 0);
+    
+    if (amountPaid <= 0) return;
+
+    const { data: existing } = await supabase.from('debt_payments').select('*').match({ debt_id: debtId, paid_month: monthId }).single();
+    
+    if (existing) {
+      await supabase.from('debt_payments').update({ amount_paid: Number(existing.amount_paid ?? 0) + amountPaid }).match({ debt_id: debtId, paid_month: monthId });
+    } else {
+      await supabase.from('debt_payments').insert({ 
+        debt_id: debtId, 
+        paid_month: monthId,
+        amount_paid: amountPaid
+      });
+    }
+    await fetchData(currentSelectedMonth);
+  };
+
+  const onUndoDebtPayment = async (formData: FormData) => {
+    const debtId = formData.get('id') as string;
+    const monthId = formData.get('monthId') as string;
+    
+    await supabase.from('debt_payments').delete().match({ debt_id: debtId, paid_month: monthId });
+    await fetchData(currentSelectedMonth);
+  };
+
+  const onUpdateDebtBalances = async (formData: FormData) => {
+    const id = formData.get('id') as string;
+    const creditor = formData.get('creditor') as string;
+    const arrears = Number(formData.get('arrears') ?? 0);
+    const float = Number(formData.get('float') ?? 0);
+    const monthly_due = Number(formData.get('monthly_due') ?? 0);
+    const original_loan_amount = Number(formData.get('original_loan_amount') ?? 0);
+    const total_debt_amount = Number(formData.get('total_debt_amount') ?? 0);
+
+    let start_date = formData.get('start_date') as string || null;
+    let end_date = formData.get('end_date') as string || null;
+    let financing_tenure = Number(formData.get('financing_tenure')) || null;
+
+    if (!financing_tenure && monthly_due > 0 && original_loan_amount > 0) {
+        financing_tenure = Math.ceil(original_loan_amount / monthly_due);
+    }
+    
+    if (start_date && financing_tenure && !end_date) {
+        const d = new Date(start_date);
+        d.setMonth(d.getMonth() + financing_tenure);
+        end_date = d.toISOString().split('T')[0];
+    }
+
+    await supabase.from('debts').update({ 
+      creditor, 
+      arrears_balance: arrears, 
+      float_balance: float,
+      monthly_due,
+      original_loan_amount,
+      total_debt_amount,
+      start_date,
+      end_date,
+      financing_tenure
+    }).eq('id', id);
+    await fetchData(currentSelectedMonth);
+  };
+
+  const onAddDebt = async (formData: FormData) => {
+    const creditor = formData.get('creditor') as string;
+    const monthly_due = Number(formData.get('monthly_due') ?? 0);
+    const original_loan_amount = Number(formData.get('original_loan_amount') ?? 0);
+
+    let start_date = formData.get('start_date') as string || null;
+    let end_date = formData.get('end_date') as string || null;
+    let financing_tenure = Number(formData.get('financing_tenure')) || null;
+
+    if (!financing_tenure && monthly_due > 0 && original_loan_amount > 0) {
+        financing_tenure = Math.ceil(original_loan_amount / monthly_due);
+    }
+    if (start_date && financing_tenure && !end_date) {
+        const d = new Date(start_date);
+        d.setMonth(d.getMonth() + financing_tenure);
+        end_date = d.toISOString().split('T')[0];
+    }
+    
+    await supabase.from('debts').insert({ 
+      creditor, 
+      monthly_due, 
+      original_loan_amount,
+      total_debt_amount: original_loan_amount,
+      arrears_balance: 0, 
+      float_balance: 0,
+      is_paid: false,
+      start_date,
+      end_date,
+      financing_tenure
+    });
+    await fetchData(currentSelectedMonth);
+  };
+
+  const onRemoveDebt = async (formData: FormData) => {
+    const id = formData.get('id') as string;
+    await supabase.from('debts').delete().eq('id', id);
+    await fetchData(currentSelectedMonth);
+  };
+
+  const onRemoveBudget = async (formData: FormData) => {
+    const id = formData.get('id') as string;
+    await supabase.from('budgets').delete().eq('id', id);
+    await fetchData(currentSelectedMonth);
+  };
+
+  const onExecuteBudgetAction = async (formData: FormData) => {
+    const budgetId = formData.get('budgetId') as string;
+    const amount = Number(formData.get('amount') ?? 0);
+    const actionType = formData.get('actionType') as string;
+    const currentAllocated = Number(formData.get('currentAllocated') ?? 0);
+    const currentSpent = Number(formData.get('currentSpent') ?? 0);
+
+    if (amount <= 0 || !budgetId) return;
+
+    await supabase.from('budget_transactions').insert({
+      budget_id: budgetId,
+      amount: amount,
+      transaction_type: actionType
+    });
+
+    if (actionType === 'spent') {
+      const newSpent = currentSpent + amount;
+      await supabase.from('budgets').update({ spent_amount: newSpent }).eq('id', budgetId);
+    } else if (actionType === 'add') {
+      const newAllocation = currentAllocated + amount;
+      await supabase.from('budgets').update({ allocated_amount: newAllocation }).eq('id', budgetId);
+    } else if (actionType === 'reduce') {
+      const newAllocation = Math.max(0, currentAllocated - amount);
+      await supabase.from('budgets').update({ allocated_amount: newAllocation }).eq('id', budgetId);
+    }
+
+    await fetchData(currentSelectedMonth);
+  };
+
+  const onAddCashInflow = async (formData: FormData) => {
+    const monthId = formData.get('monthId') as string;
+    const particular = formData.get('particular') as string;
+    const amount = Number(formData.get('amount') ?? 0);
+
+    if (amount <= 0 || !particular) return;
+
+    await supabase.from('cash_inflows').insert({
+      month_id: monthId,
+      particular: particular,
+      amount: amount
+    });
+
+    await fetchData(currentSelectedMonth);
+  };
+
+  const onDeleteLogEntry = async (formData: FormData) => {
+    const id = formData.get('id') as string;
+    const source = formData.get('source') as string;
+    
+    if (source === 'budget') {
+      const { data: trx } = await supabase.from('budget_transactions').select('*').eq('id', id).single();
+      if (trx) {
+         const { data: b } = await supabase.from('budgets').select('*').eq('id', trx.budget_id).single();
+         if (b) {
+           if (trx.transaction_type === 'spent') {
+              await supabase.from('budgets').update({ spent_amount: Number(b.spent_amount) - Number(trx.amount) }).eq('id', b.id);
+           } else if (trx.transaction_type === 'add') {
+              await supabase.from('budgets').update({ allocated_amount: Number(b.allocated_amount) - Number(trx.amount) }).eq('id', b.id);
+           } else if (trx.transaction_type === 'reduce') {
+              await supabase.from('budgets').update({ allocated_amount: Number(b.allocated_amount) + Number(trx.amount) }).eq('id', b.id);
+           }
+         }
+         await supabase.from('budget_transactions').delete().eq('id', id);
+      }
+    } else if (source === 'transfer') {
+      await supabase.from('liquidity_transfers').delete().eq('id', id);
+    } else if (source === 'inflow') {
+      await supabase.from('cash_inflows').delete().eq('id', id);
+    } else if (source === 'debt') {
+      const debt_id = formData.get('raw_debt_id') as string;
+      const paid_month = formData.get('raw_paid_month') as string;
+      await supabase.from('debt_payments').delete().match({ debt_id, paid_month });
+    } else if (source === 'bskl') {
+      const contract_id = formData.get('raw_contract_id') as string;
+      const paid_date = formData.get('raw_paid_date') as string;
+      await supabase.from('bskl_payments').delete().match({ contract_id, paid_date });
+    }
+    
+    await fetchData(currentSelectedMonth);
+  };
+
+  const onAmendLogEntry = async (formData: FormData) => {
+    const id = formData.get('id') as string;
+    const source = formData.get('source') as string;
+    const newAmount = Number(formData.get('amount') ?? 0);
+    
+    if (source === 'budget' && newAmount >= 0) {
+      const { data: trx } = await supabase.from('budget_transactions').select('*').eq('id', id).single();
+      if (trx) {
+         const diff = newAmount - Number(trx.amount);
+         const { data: b } = await supabase.from('budgets').select('*').eq('id', trx.budget_id).single();
+         if (b) {
+           if (trx.transaction_type === 'spent') {
+              await supabase.from('budgets').update({ spent_amount: Number(b.spent_amount) + diff }).eq('id', b.id);
+           } else if (trx.transaction_type === 'add') {
+              await supabase.from('budgets').update({ allocated_amount: Number(b.allocated_amount) + diff }).eq('id', b.id);
+           } else if (trx.transaction_type === 'reduce') {
+              await supabase.from('budgets').update({ allocated_amount: Number(b.allocated_amount) - diff }).eq('id', b.id);
+           }
+         }
+         await supabase.from('budget_transactions').update({ amount: newAmount }).eq('id', id);
+      }
+    } else if (source === 'transfer' && newAmount >= 0) {
+      await supabase.from('liquidity_transfers').update({ amount: newAmount }).eq('id', id);
+    } else if (source === 'inflow' && newAmount >= 0) {
+      await supabase.from('cash_inflows').update({ amount: newAmount }).eq('id', id);
+    }
+    await fetchData(currentSelectedMonth);
+    setEditLogId(null);
+  };
+
+  const onUpdateBudgetSettings = async (formData: FormData) => {
+    const id = formData.get('id') as string;
+    const category = formData.get('category') as string;
+    const allocated = Number(formData.get('allocated') ?? 0);
+    await supabase.from('budgets').update({ category, allocated_amount: allocated }).eq('id', id);
+    await fetchData(currentSelectedMonth);
+  };
+
+  const onSendToSavings = async (formData: FormData) => {
+    const id = formData.get('id') as string;
+    await supabase.from('budgets').update({ is_saved: true }).eq('id', id);
+    await fetchData(currentSelectedMonth);
+  };
+
+  const onUndoSavings = async (formData: FormData) => {
+    const id = formData.get('id') as string;
+    await supabase.from('budgets').update({ is_saved: false }).eq('id', id);
+    await fetchData(currentSelectedMonth);
+  };
+
+  const onAddBudget = async (formData: FormData) => {
+    const category = formData.get('category') as string;
+    const allocated_amount = Number(formData.get('allocated_amount') ?? 0);
+    const budget_month = formData.get('budget_month') as string;
+
+    await supabase.from('budgets').insert({ 
+      category, 
+      allocated_amount, 
+      budget_month,
+      spent_amount: 0,
+      is_saved: false
+    });
+    await fetchData(currentSelectedMonth);
+  };
+
+  const onDuplicatePreviousBudgets = async (formData: FormData) => {
+    const currentMonth = formData.get('currentMonth') as string;
+    const prevMonth = formData.get('prevMonth') as string;
+
+    const { data: oldBudgets } = await supabase.from('budgets').select('*').eq('budget_month', prevMonth);
+    
+    if (oldBudgets && oldBudgets.length > 0) {
+       const newBudgets = oldBudgets.map((b: any) => ({
+         category: b.category,
+         allocated_amount: b.allocated_amount,
+         budget_month: currentMonth,
+         spent_amount: 0,
+         is_saved: false
+       }));
+       await supabase.from('budgets').insert(newBudgets);
+    }
+    await fetchData(currentSelectedMonth);
+  };
+
+  const onTransferFromPool = async (formData: FormData) => {
+    const monthId = formData.get('monthId') as string;
+    const amount = Number(formData.get('amount') ?? 0);
+    if (amount <= 0) return;
+    
+    await supabase.from('liquidity_transfers').insert({ month_id: monthId, amount });
+    await fetchData(currentSelectedMonth);
+  };
+
+  const onAddBsklContract = async (formData: FormData) => {
+    const name = formData.get('name') as string;
+    const capital = Number(formData.get('capital') ?? 0);
+    const rate = Number(formData.get('rate') ?? 0);
+    const effectiveDate = formData.get('effectiveDate') as string;
+
+    await supabase.from('bskl_contracts').insert({
+      name,
+      capital_injection: capital,
+      daily_rate: rate,
+      effective_date: effectiveDate,
+      is_active: true
+    });
+    await fetchData(currentSelectedMonth);
+  };
+
+  const onUpdateBsklContract = async (formData: FormData) => {
+    const id = formData.get('id') as string;
+    const name = formData.get('name') as string;
+    const capital = Number(formData.get('capital') ?? 0);
+    const rate = Number(formData.get('rate') ?? 0);
+    const effectiveDate = formData.get('effectiveDate') as string;
+
+    await supabase.from('bskl_contracts').update({
+      name,
+      capital_injection: capital,
+      daily_rate: rate,
+      effective_date: effectiveDate
+    }).eq('id', id);
+    await fetchData(currentSelectedMonth);
+  };
+
+  const onEndBsklContract = async (formData: FormData) => {
+    const id = formData.get('id') as string;
+    const endDate = new Date().toISOString().split('T')[0];
+    
+    await supabase.from('bskl_contracts').update({ 
+      is_active: false, 
+      end_date: endDate 
+    }).eq('id', id);
+    await fetchData(currentSelectedMonth);
+  };
+
+  const onToggleBsklPayment = async (formData: FormData) => {
+    const contractId = formData.get('contract_id') as string;
+    const dateStr = formData.get('date') as string;
+    const amount = Number(formData.get('amount') ?? 0);
+    const isPaid = formData.get('isPaid') === 'true';
+    
+    if (isPaid) {
+      await supabase.from('bskl_payments').delete().match({ contract_id: contractId, paid_date: dateStr });
+    } else {
+      await supabase.from('bskl_payments').insert({ contract_id: contractId, paid_date: dateStr, amount });
+    }
+    await fetchData(currentSelectedMonth);
+  };
+
+  const onAddBsklHoliday = async (formData: FormData) => {
+    const dateStr = formData.get('date') as string;
+    const description = formData.get('description') as string;
+    await supabase.from('bskl_holidays').insert({ holiday_date: dateStr, description });
+    await fetchData(currentSelectedMonth);
+  };
+
+  const onRemoveBsklHoliday = async (formData: FormData) => {
+    const id = formData.get('id') as string;
+    await supabase.from('bskl_holidays').delete().eq('id', id);
+    await fetchData(currentSelectedMonth);
+  };
+
+  const onUpdateSalary = async (formData: FormData) => {
+    const monthId = formData.get('monthId') as string;
+    const amount = Number(formData.get('amount') ?? 0);
+    await supabase.from('monthly_salary').upsert({ month_id: monthId, salary_amount: amount });
+    await fetchData(currentSelectedMonth);
+  };
+
+  // --- CALENDAR CALCULATIONS ---
   const year = parseInt(currentSelectedMonth.split('-')[0]);
   const monthIndex = parseInt(currentSelectedMonth.split('-')[1]) - 1;
   const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
@@ -645,14 +493,13 @@ export default async function Home(props: any = {}) {
   const totalLoansOutstanding = activeDebtsThisMonth.reduce((s: number, d: any) => {
     const isPaidThisMonth = allDebtPayments.some((dp: any) => dp.debt_id == d.id && dp.paid_month === currentMonthId);
     return s + (isPaidThisMonth ? 0 : n(d.monthly_due) + n(d.arrears_balance) - n(d.float_balance));
-  }, 0) ?? 0
+  }, 0) ?? 0;
 
   const paidLoansThisMonth = activeDebtsThisMonth.filter((d: any) => allDebtPayments.some((dp: any) => dp.debt_id == d.id && dp.paid_month === currentMonthId)).reduce((s: number, d: any) => s + n(d.monthly_due), 0) ?? 0;
   
   const paidLoansStatementTotal = activeDebtsThisMonth.reduce((s: number, d: any) => {
     const payment = allDebtPayments.find((dp: any) => dp.debt_id == d.id && dp.paid_month === currentMonthId);
     if (payment) {
-      // Use the explicitly paid custom amount if present, else fallback to standard calculation
       return s + (payment.amount_paid ? Number(payment.amount_paid) : (n(d.monthly_due) + n(d.arrears_balance) - n(d.float_balance)));
     }
     return s;
@@ -696,10 +543,10 @@ export default async function Home(props: any = {}) {
 
   // --- BUDGET & POOL CALCULATIONS ---
   const totalBudgetsAllocatedThisMonth = budgets?.reduce((s: number, b: any) => s + n(b.allocated_amount), 0) ?? 0;
-  const totalBudgetsRemaining = budgets?.filter((b: any) => !b.is_saved).reduce((s: number, b: any) => s + Math.max(0, n(b.allocated_amount) - n(b.spent_amount)), 0) ?? 0
-  const spentBudgetsThisMonth = budgets?.reduce((s: number, b: any) => s + n(b.spent_amount), 0) ?? 0
-  const savedBudgetsThisMonth = budgets?.filter((b: any) => b.is_saved).reduce((s: number, b: any) => s + Math.max(0, n(b.allocated_amount) - n(b.spent_amount)), 0) ?? 0
-  const totalSavedAcrossAllMonths = allBudgetsOfYear?.filter((b: any) => b.is_saved).reduce((s: number, b: any) => s + Math.max(0, n(b.allocated_amount) - n(b.spent_amount)), 0) ?? 0
+  const totalBudgetsRemaining = budgets?.filter((b: any) => !b.is_saved).reduce((s: number, b: any) => s + Math.max(0, n(b.allocated_amount) - n(b.spent_amount)), 0) ?? 0;
+  const spentBudgetsThisMonth = budgets?.reduce((s: number, b: any) => s + n(b.spent_amount), 0) ?? 0;
+  const savedBudgetsThisMonth = budgets?.filter((b: any) => b.is_saved).reduce((s: number, b: any) => s + Math.max(0, n(b.allocated_amount) - n(b.spent_amount)), 0) ?? 0;
+  const totalSavedAcrossAllMonths = allBudgetsOfYear?.filter((b: any) => b.is_saved).reduce((s: number, b: any) => s + Math.max(0, n(b.allocated_amount) - n(b.spent_amount)), 0) ?? 0;
 
   const totalTransferredFromPoolAllTime = transfers.reduce((s: number, t: any) => s + n(t.amount), 0);
   const poolTransfersInThisMonth = transfers.filter((t: any) => t.month_id === currentMonthId).reduce((s: number, t: any) => s + n(t.amount), 0);
@@ -710,23 +557,23 @@ export default async function Home(props: any = {}) {
   const currentCheckingBalance = currentSalary + poolTransfersInThisMonth - totalBudgetsAllocatedThisMonth - paidLoansStatementTotal - totalBsklCapitalOutflowThisMonth;
   const totalRemainingBalance = totalLoansOutstanding + totalBudgetsRemaining + totalBsklRemainingCapitalToPay;
   const totalPaidThisMonth = paidLoansThisMonth + spentBudgetsThisMonth + savedBudgetsThisMonth + totalBsklRepaymentsInflowThisMonth;
-  const grandTotalMonthlyFootprint = totalRemainingBalance + totalPaidThisMonth
-  const progressPct = grandTotalMonthlyFootprint > 0 ? Math.min(100, (totalPaidThisMonth / grandTotalMonthlyFootprint) * 100) : 0
+  const grandTotalMonthlyFootprint = totalRemainingBalance + totalPaidThisMonth;
+  const progressPct = grandTotalMonthlyFootprint > 0 ? Math.min(100, (totalPaidThisMonth / grandTotalMonthlyFootprint) * 100) : 0;
   
   const yearlyPaidLoans = allDebtPayments.filter((dp: any) => dp.paid_month.startsWith(year.toString())).reduce((sum: number, dp: any) => {
-    const debt = debts?.find((d: any) => d.id == dp.debt_id); // using global debts reference to accurately sum historical regardless if it's currently active
+    const debt = debts?.find((d: any) => d.id == dp.debt_id);
     return sum + (debt ? n(debt.monthly_due) : 0);
   }, 0);
 
-  const baseMonthlyLoanTotal = activeDebtsThisMonth.reduce((s: number, d: any) => s + n(d.monthly_due), 0) ?? 0
+  const baseMonthlyLoanTotal = activeDebtsThisMonth.reduce((s: number, d: any) => s + n(d.monthly_due), 0) ?? 0;
   const yearlyTotalAllocated = (allBudgetsOfYear?.reduce((s: number, b: any) => s + n(b.allocated_amount), 0) ?? 0) + baseMonthlyLoanTotal * 2 + totalBsklCapitalAllTime;
   const yearlyTotalBudgetCleared = allBudgetsOfYear?.reduce((s: number, b: any) => {
-    const spent = n(b.spent_amount)
-    const saved = b.is_saved ? Math.max(0, n(b.allocated_amount) - spent) : 0
-    return s + spent + saved
-  }, 0) ?? 0
+    const spent = n(b.spent_amount);
+    const saved = b.is_saved ? Math.max(0, n(b.allocated_amount) - spent) : 0;
+    return s + spent + saved;
+  }, 0) ?? 0;
   const yearlyTotalPaid = yearlyTotalBudgetCleared + yearlyPaidLoans + totalBsklRepaidAllTime;
-  const yearlyProgressPercentage = yearlyTotalAllocated > 0 ? Math.min(100, (yearlyTotalPaid / yearlyTotalAllocated) * 100) : 0
+  const yearlyProgressPercentage = yearlyTotalAllocated > 0 ? Math.min(100, (yearlyTotalPaid / yearlyTotalAllocated) * 100) : 0;
 
   // --- MONTHLY SPLIT CHART MATH ---
   const monthlyLoansFlow = paidLoansStatementTotal;
@@ -746,7 +593,7 @@ export default async function Home(props: any = {}) {
   const formattedMonthDisplay = new Date(currentSelectedMonth + 'T00:00:00').toLocaleDateString('en-MY', {
     month: 'long',
     year: 'numeric',
-  }).toUpperCase()
+  }).toUpperCase();
 
   // --- CENTRALIZED TRANSACTION LOG ENGINE ---
   let systemLogs: any[] = [];
@@ -825,6 +672,15 @@ export default async function Home(props: any = {}) {
   const logTotalOut = systemLogs.filter(l => l.type === 'out').reduce((s, l) => s + l.amount, 0);
   const logNetBalance = logTotalIn - logTotalOut;
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#0b0e14] flex flex-col items-center justify-center text-slate-200">
+        <div className="w-12 h-12 rounded-full border-4 border-teal-500/20 border-t-teal-500 animate-spin mb-4" />
+        <p className="text-xs uppercase tracking-[0.2em] font-black text-[#8a93a6] animate-pulse">SINKRONISASI DATA SUPABASE...</p>
+      </div>
+    );
+  }
+
   return (
     <>
       <style dangerouslySetInnerHTML={{__html: `
@@ -849,7 +705,7 @@ export default async function Home(props: any = {}) {
                   <h3 className="text-lg font-black text-white uppercase tracking-widest">Trade Returns</h3>
                   <p className="text-xs text-teal-400 font-bold tracking-widest mt-1">{new Date(bsklModalDate).toLocaleDateString('en-MY', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
                 </div>
-                <a href={`?month=${currentSelectedMonth}${isEditing ? '&edit=true' : ''}`} className="text-[#8a93a6] hover:text-white text-2xl leading-none">&times;</a>
+                <button onClick={() => setBsklModalDate(null)} className="text-[#8a93a6] hover:text-white text-2xl leading-none">&times;</button>
               </div>
               <div className="p-6 space-y-4">
                 {enrichedContracts.filter((c: any) => {
@@ -874,7 +730,7 @@ export default async function Home(props: any = {}) {
                   }
 
                   return (
-                    <form key={c.id} action={toggleBsklPayment} className={`flex justify-between items-center p-4 rounded-xl border ${isPaid ? 'bg-teal-500/10 border-teal-500/30' : 'bg-[#0b0e14] border-[#383e52]'}`}>
+                    <form key={c.id} onSubmit={(e) => { e.preventDefault(); onToggleBsklPayment(new FormData(e.currentTarget)); }} className={`flex justify-between items-center p-4 rounded-xl border ${isPaid ? 'bg-teal-500/10 border-teal-500/30' : 'bg-[#0b0e14] border-[#383e52]'}`}>
                       <input type="hidden" name="contract_id" value={c.id} />
                       <input type="hidden" name="date" value={bsklModalDate} />
                       <input type="hidden" name="amount" value={c.daily_rate} />
@@ -887,7 +743,7 @@ export default async function Home(props: any = {}) {
                         {isPaid ? 'Undo' : 'Collect'}
                       </button>
                     </form>
-                  )
+                  );
                 })}
               </div>
             </div>
@@ -903,7 +759,7 @@ export default async function Home(props: any = {}) {
                   <h3 className="text-lg font-black text-white uppercase tracking-widest">Transaction Log</h3>
                   <p className="text-xs text-teal-400 font-bold tracking-widest mt-1">Cycle: {formattedMonthDisplay}</p>
                 </div>
-                <a href={`?month=${currentSelectedMonth}${isEditing ? '&edit=true' : ''}`} className="text-[#8a93a6] hover:text-white text-2xl leading-none">&times;</a>
+                <button onClick={() => setIsLogOpen(false)} className="text-[#8a93a6] hover:text-white text-2xl leading-none">&times;</button>
               </div>
               
               <div className="bg-[#161a23] border-b border-[#272b38] p-4 sm:p-5 flex justify-between items-center shrink-0">
@@ -945,10 +801,10 @@ export default async function Home(props: any = {}) {
                        {!isReadOnly && (
                          <div className="flex justify-end gap-2 border-t border-[#272b38] pt-3 mt-1">
                            {(log.source === 'budget' || log.source === 'transfer' || log.source === 'inflow') && !isEditingLog && (
-                             <a href={`?month=${currentSelectedMonth}&log=true&editLog=${log.id}${isEditing ? '&edit=true' : ''}`} className="text-[9px] uppercase tracking-widest font-bold px-4 py-2 bg-[#161a23] text-amber-400 border border-amber-500/30 rounded-lg hover:bg-amber-500/10 transition-colors">Amend</a>
+                             <button onClick={() => setEditLogId(log.id)} className="text-[9px] uppercase tracking-widest font-bold px-4 py-2 bg-[#161a23] text-amber-400 border border-amber-500/30 rounded-lg hover:bg-amber-500/10 transition-colors">Amend</button>
                            )}
                            {!isEditingLog && (
-                             <form action={deleteLogEntry}>
+                             <form onSubmit={(e) => { e.preventDefault(); onDeleteLogEntry(new FormData(e.currentTarget)); }}>
                                <input type="hidden" name="id" value={log.id} />
                                <input type="hidden" name="source" value={log.source} />
                                {log.source === 'debt' && <><input type="hidden" name="raw_debt_id" value={log.raw.debt_id} /><input type="hidden" name="raw_paid_month" value={log.raw.paid_month} /></>}
@@ -960,16 +816,16 @@ export default async function Home(props: any = {}) {
                        )}
 
                        {isEditingLog && (log.source === 'budget' || log.source === 'transfer' || log.source === 'inflow') && (
-                         <form action={amendLogEntry} className="flex gap-2 border-t border-[#272b38] pt-3 mt-1">
+                         <form onSubmit={(e) => { e.preventDefault(); onAmendLogEntry(new FormData(e.currentTarget)); }} className="flex gap-2 border-t border-[#272b38] pt-3 mt-1">
                            <input type="hidden" name="id" value={log.id} />
                            <input type="hidden" name="source" value={log.source} />
                            <input type="number" step="0.01" name="amount" defaultValue={log.amount.toFixed(2)} className="flex-1 bg-[#161a23] border border-[#383e52] rounded-lg px-3 py-2 text-white text-xs outline-none focus:border-amber-500/50" />
                            <button type="submit" className="text-[9px] uppercase tracking-widest font-bold px-4 py-2 bg-amber-500/10 text-amber-400 border border-amber-500/30 rounded-lg hover:bg-amber-500/20 transition-colors">Save</button>
-                           <a href={`?month=${currentSelectedMonth}&log=true${isEditing ? '&edit=true' : ''}`} className="text-[9px] uppercase tracking-widest font-bold px-4 py-2 bg-[#161a23] text-[#8a93a6] border-[#383e52] rounded-lg hover:text-white flex items-center transition-colors">Cancel</a>
+                           <button type="button" onClick={() => setEditLogId(null)} className="text-[9px] uppercase tracking-widest font-bold px-4 py-2 bg-[#161a23] text-[#8a93a6] border-[#383e52] rounded-lg hover:text-white flex items-center transition-colors">Cancel</button>
                          </form>
                        )}
                      </div>
-                   )
+                   );
                 })}
               </div>
             </div>
@@ -996,8 +852,8 @@ export default async function Home(props: any = {}) {
               <span className="w-1.5 h-1.5 rounded-full bg-[#8a93a6]"></span> VIEWER MODE
             </div>
           ) : (
-            <a
-              href={`?month=${currentSelectedMonth}${isEditing ? '' : '&edit=true'}`}
+            <button
+              onClick={() => setIsEditing(!isEditing)}
               className={`text-[9px] sm:text-[10px] md:text-xs font-bold px-4 py-2 sm:px-5 sm:py-2.5 rounded-full border transition-all uppercase tracking-widest flex items-center gap-1.5 sm:gap-2 ${
                 isEditing 
                   ? 'bg-rose-500/10 text-rose-400 border-rose-500/50 hover:bg-rose-500/20' 
@@ -1009,7 +865,7 @@ export default async function Home(props: any = {}) {
               ) : (
                 <><span className="text-base leading-none">&#9881;</span> CUSTOMIZE</>
               )}
-            </a>
+            </button>
           )}
         </header>
 
@@ -1017,13 +873,13 @@ export default async function Home(props: any = {}) {
           
           {/* --- DYNAMIC TIME SWITCHER --- */}
           <div className="flex justify-between sm:justify-center items-center gap-3 sm:gap-6 max-w-2xl mx-auto mb-4 sm:mb-10 bg-[#161a23]/30 sm:bg-transparent p-2 rounded-xl border border-[#272b38]/30 sm:border-transparent">
-            <a href={`?month=${prevMonthStr}`} className="text-[8px] sm:text-[10px] md:text-xs font-bold px-3 py-1.5 sm:px-5 sm:py-2 rounded-full border border-[#272b38] sm:border-transparent text-[#8a93a6] hover:text-white hover:bg-[#161a23] transition-all tracking-widest uppercase">
+            <button onClick={() => setCurrentSelectedMonth(prevMonthStr)} className="text-[8px] sm:text-[10px] md:text-xs font-bold px-3 py-1.5 sm:px-5 sm:py-2 rounded-full border border-[#272b38] sm:border-transparent text-[#8a93a6] hover:text-white hover:bg-[#161a23] transition-all tracking-widest uppercase">
               &laquo; {prevMonthLabel}
-            </a>
+            </button>
             <span className="text-xs sm:text-lg md:text-2xl font-black text-white uppercase tracking-widest text-center">{formattedMonthDisplay}</span>
-            <a href={`?month=${nextMonthStr}`} className="text-[8px] sm:text-[10px] md:text-xs font-bold px-3 py-1.5 sm:px-5 sm:py-2 rounded-full border border-[#272b38] sm:border-transparent text-[#8a93a6] hover:text-white hover:bg-[#161a23] transition-all tracking-widest uppercase">
+            <button onClick={() => setCurrentSelectedMonth(nextMonthStr)} className="text-[8px] sm:text-[10px] md:text-xs font-bold px-3 py-1.5 sm:px-5 sm:py-2 rounded-full border border-[#272b38] sm:border-transparent text-[#8a93a6] hover:text-white hover:bg-[#161a23] transition-all tracking-widest uppercase">
               {nextMonthLabel} &raquo;
-            </a>
+            </button>
           </div>
 
           {/* --- 4-COLUMN RESPONSIVE METRICS GRID --- */}
@@ -1040,7 +896,7 @@ export default async function Home(props: any = {}) {
                   RM {currentCheckingBalance.toLocaleString('en-MY', { minimumFractionDigits: 2 })}
                 </p>
                 {!isReadOnly && (
-                  <form action={updateSalary} className="flex gap-2 mt-4 sm:mt-5">
+                  <form onSubmit={(e) => { e.preventDefault(); onUpdateSalary(new FormData(e.currentTarget)); }} className="flex gap-2 mt-4 sm:mt-5">
                     <input type="hidden" name="monthId" value={currentMonthId} />
                     <input type="number" step="0.01" name="amount" defaultValue={currentSalary || ''} placeholder="Set Salary..." className="w-full bg-[#0b0e14] border border-[#272b38] rounded-lg px-2.5 py-2 text-white placeholder-[#8a93a6] text-xs outline-none focus:border-amber-500/50" />
                     <button type="submit" className="bg-[#272b38] text-white px-2.5 py-2 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-[#383e52] transition-colors">SET</button>
@@ -1064,9 +920,9 @@ export default async function Home(props: any = {}) {
                   <p className="text-2xl sm:text-3xl md:text-4xl font-bold text-white tracking-tight">
                     RM {totalRemainingBalance.toLocaleString('en-MY', { minimumFractionDigits: 2 })}
                   </p>
-                  <a href={`?month=${currentSelectedMonth}&log=true${isEditing ? '&edit=true' : ''}`} className="flex-shrink-0 flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 text-teal-400 bg-teal-500/10 border border-teal-500/30 rounded-lg hover:bg-teal-500/20 transition-colors shadow-[0_0_10px_rgba(20,184,166,0.1)]" title="Transaction Log">
+                  <button onClick={() => setIsLogOpen(true)} className="flex-shrink-0 flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 text-teal-400 bg-teal-500/10 border border-teal-500/30 rounded-lg hover:bg-teal-500/20 transition-colors shadow-[0_0_10px_rgba(20,184,166,0.1)]" title="Transaction Log">
                     <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                  </a>
+                  </button>
                 </div>
                 
                 <div className="flex justify-between items-center border-t border-[#272b38]/50 pt-3 mt-3">
@@ -1168,7 +1024,7 @@ export default async function Home(props: any = {}) {
               </div>
               <div className="relative z-10 mt-4 sm:mt-5">
                 {!isReadOnly && (
-                  <form action={transferFromPool} className="flex gap-2">
+                  <form onSubmit={(e) => { e.preventDefault(); onTransferFromPool(new FormData(e.currentTarget)); }} className="flex gap-2">
                     <input type="hidden" name="monthId" value={currentMonthId} />
                     <input type="number" step="0.01" name="amount" placeholder="Withdraw..." max={currentPoolBalance > 0 ? currentPoolBalance : 0} className="w-full bg-[#0b0e14] border border-[#272b38] rounded-lg px-2.5 py-2 text-white placeholder-[#8a93a6] text-xs outline-none focus:border-teal-500/50" />
                     <button type="submit" disabled={currentPoolBalance <= 0} className="bg-[#272b38] text-white px-2.5 py-2 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-[#383e52] transition-colors disabled:opacity-50">MOVE</button>
@@ -1208,12 +1064,12 @@ export default async function Home(props: any = {}) {
                     const defaultStartDate = debt.start_date || '';
 
                     return (
-                      <form key={debt.id} action={updateDebtBalances} className="p-4 sm:p-5 bg-[#0b0e14] rounded-xl border border-[#272b38] space-y-4 shadow-sm hover:border-[#383e52] transition-colors flex flex-col justify-between">
+                      <form key={debt.id} onSubmit={(e) => { e.preventDefault(); onUpdateDebtBalances(new FormData(e.currentTarget)); }} className="p-4 sm:p-5 bg-[#0b0e14] rounded-xl border border-[#272b38] space-y-4 shadow-sm hover:border-[#383e52] transition-colors flex flex-col justify-between">
                         <div>
                           <input type="hidden" name="id" value={debt.id} />
                           <div className="flex items-center gap-2 mb-4">
                             <input type="text" name="creditor" defaultValue={debt.creditor} className="w-full bg-transparent font-bold text-white text-sm outline-none border-b border-transparent focus:border-amber-500/50 pb-1 transition-colors" placeholder="Liability Name" />
-                            <button formAction={removeDebt} type="submit" className="text-[#8a93a6] hover:text-rose-400 hover:bg-rose-500/10 p-1.5 rounded transition-colors" title="Delete Liability">
+                            <button formAction={onRemoveDebt} type="submit" className="text-[#8a93a6] hover:text-rose-400 hover:bg-rose-500/10 p-1.5 rounded transition-colors" title="Delete Liability">
                               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                               </svg>
@@ -1256,10 +1112,10 @@ export default async function Home(props: any = {}) {
                         </div>
                         <button type="submit" className="w-full bg-amber-500/10 text-amber-400 border border-amber-500/30 hover:bg-amber-500/20 font-bold py-2.5 rounded-lg transition-colors text-[10px] uppercase tracking-widest mt-4">Save Changes</button>
                       </form>
-                    )
+                    );
                   })}
 
-                  <form action={addDebt} className="p-4 sm:p-5 bg-[#161a23] rounded-xl border border-dashed border-[#383e52] space-y-4 shadow-sm hover:border-amber-500/50 transition-colors flex flex-col justify-between">
+                  <form onSubmit={(e) => { e.preventDefault(); onAddDebt(new FormData(e.currentTarget)); }} className="p-4 sm:p-5 bg-[#161a23] rounded-xl border border-dashed border-[#383e52] space-y-4 shadow-sm hover:border-amber-500/50 transition-colors flex flex-col justify-between">
                     <div>
                       <p className="font-bold text-amber-400 text-sm border-b border-amber-500/20 pb-1 mb-4">+ Add New Liability</p>
                       <div className="space-y-3 sm:space-y-4">
@@ -1306,7 +1162,7 @@ export default async function Home(props: any = {}) {
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6">
                     {bsklContracts.map((c: any) => (
-                      <form key={c.id} className="p-4 sm:p-5 bg-[#0b0e14] rounded-xl border border-[#272b38] space-y-4 shadow-sm hover:border-[#383e52] transition-colors flex flex-col justify-between">
+                      <form key={c.id} onSubmit={(e) => { e.preventDefault(); }} className="p-4 sm:p-5 bg-[#0b0e14] rounded-xl border border-[#272b38] space-y-4 shadow-sm hover:border-[#383e52] transition-colors flex flex-col justify-between">
                         <input type="hidden" name="id" value={c.id} />
                         <div>
                           <div className="flex justify-between items-center border-b border-[#272b38] pb-2 mb-3 gap-2">
@@ -1357,14 +1213,14 @@ export default async function Home(props: any = {}) {
                         
                         {c.is_active && (
                           <div className="flex gap-2 mt-2 pt-2 border-t border-[#272b38]">
-                            <button formAction={updateBsklContract} className="flex-1 bg-blue-500/10 text-blue-400 border border-blue-500/30 hover:bg-blue-500/20 font-bold py-2 rounded-lg transition-colors text-[10px] uppercase tracking-widest">Edit / Save</button>
-                            <button formAction={endBsklContract} className="flex-1 bg-[#161a23] text-rose-400 border border-[#383e52] hover:bg-rose-500/10 hover:border-rose-500/40 font-bold py-2 rounded-lg transition-colors text-[10px] uppercase tracking-widest">End</button>
+                            <button onClick={(e) => { e.preventDefault(); onUpdateBsklContract(new FormData(e.currentTarget.form!)); }} className="flex-1 bg-blue-500/10 text-blue-400 border border-blue-500/30 hover:bg-blue-500/20 font-bold py-2 rounded-lg transition-colors text-[10px] uppercase tracking-widest">Edit / Save</button>
+                            <button onClick={(e) => { e.preventDefault(); onEndBsklContract(new FormData(e.currentTarget.form!)); }} className="flex-1 bg-[#161a23] text-rose-400 border border-[#383e52] hover:bg-rose-500/10 hover:border-rose-500/40 font-bold py-2 rounded-lg transition-colors text-[10px] uppercase tracking-widest">End</button>
                           </div>
                         )}
                       </form>
                     ))}
 
-                    <form action={addBsklContract} className="p-4 sm:p-5 bg-[#161a23] rounded-xl border border-dashed border-[#383e52] space-y-4 shadow-sm hover:border-blue-500/50 transition-colors flex flex-col justify-center">
+                    <form onSubmit={(e) => { e.preventDefault(); onAddBsklContract(new FormData(e.currentTarget)); }} className="p-4 sm:p-5 bg-[#161a23] rounded-xl border border-dashed border-[#383e52] space-y-4 shadow-sm hover:border-blue-500/50 transition-colors flex flex-col justify-center">
                       <p className="font-bold text-blue-400 text-sm border-b border-blue-500/20 pb-1">+ New Injection</p>
                       <div className="space-y-3 sm:space-y-4">
                         <div>
@@ -1405,14 +1261,14 @@ export default async function Home(props: any = {}) {
                           <p className="font-bold text-white text-sm">{h.description || 'Holiday'}</p>
                           <p className="text-[10px] text-[#8a93a6] font-mono mt-1">{h.holiday_date}</p>
                         </div>
-                        <form action={removeBsklHoliday}>
+                        <form onSubmit={(e) => { e.preventDefault(); onRemoveBsklHoliday(new FormData(e.currentTarget)); }}>
                           <input type="hidden" name="id" value={h.id} />
                           <button type="submit" className="text-rose-400 hover:text-rose-300 text-lg leading-none p-1">&times;</button>
                         </form>
                       </div>
                     ))}
 
-                    <form action={addBsklHoliday} className="p-4 bg-[#161a23] rounded-xl border border-dashed border-[#383e52] shadow-sm hover:border-emerald-500/50 transition-colors flex flex-col justify-center">
+                    <form onSubmit={(e) => { e.preventDefault(); onAddBsklHoliday(new FormData(e.currentTarget)); }} className="p-4 bg-[#161a23] rounded-xl border border-dashed border-[#383e52] shadow-sm hover:border-emerald-500/50 transition-colors flex flex-col justify-center">
                       <p className="font-bold text-emerald-400 text-sm border-b border-emerald-500/20 pb-1 mb-3">+ Add Holiday</p>
                       <div className="space-y-3">
                         <div>
@@ -1436,11 +1292,11 @@ export default async function Home(props: any = {}) {
                 <h3 className="text-xs font-bold uppercase text-teal-400 tracking-[0.15em]">Budget Sync Utility</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6">
                   {budgets?.map((budget: any) => (
-                    <form key={budget.id} action={updateBudgetSettings} className="p-4 sm:p-5 bg-[#0b0e14] rounded-xl border border-[#272b38] space-y-4 shadow-sm hover:border-[#383e52] transition-colors">
+                    <form key={budget.id} onSubmit={(e) => { e.preventDefault(); onUpdateBudgetSettings(new FormData(e.currentTarget)); }} className="p-4 sm:p-5 bg-[#0b0e14] rounded-xl border border-[#272b38] space-y-4 shadow-sm hover:border-[#383e52] transition-colors">
                       <input type="hidden" name="id" value={budget.id} />
                       <div className="flex items-center gap-2">
                         <input type="text" name="category" defaultValue={budget.category} className="w-full bg-transparent font-bold text-white text-sm outline-none border-b border-transparent focus:border-teal-500/50 pb-1 transition-colors" placeholder="Budget Category Name" />
-                        <button formAction={removeBudget} type="submit" className="text-[#8a93a6] hover:text-rose-400 hover:bg-rose-500/10 p-1.5 rounded transition-colors" title="Delete Budget">
+                        <button onClick={(e) => { e.preventDefault(); onRemoveBudget(new FormData(e.currentTarget.form!)); }} className="text-[#8a93a6] hover:text-rose-400 hover:bg-rose-500/10 p-1.5 rounded transition-colors" title="Delete Budget">
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                           </svg>
@@ -1454,7 +1310,7 @@ export default async function Home(props: any = {}) {
                     </form>
                   ))}
 
-                  <form action={addBudget} className="p-4 sm:p-5 bg-[#161a23] rounded-xl border border-dashed border-[#383e52] space-y-4 shadow-sm hover:border-teal-500/50 transition-colors flex flex-col justify-center">
+                  <form onSubmit={(e) => { e.preventDefault(); onAddBudget(new FormData(e.currentTarget)); }} className="p-4 sm:p-5 bg-[#161a23] rounded-xl border border-dashed border-[#383e52] space-y-4 shadow-sm hover:border-teal-500/50 transition-colors flex flex-col justify-center">
                     <input type="hidden" name="budget_month" value={currentSelectedMonth} />
                     <p className="font-bold text-teal-400 text-sm border-b border-teal-500/20 pb-1 mb-2">+ Add New Budget</p>
                     <div className="space-y-3 sm:space-y-4">
@@ -1489,18 +1345,16 @@ export default async function Home(props: any = {}) {
                 {activeDebtsThisMonth.map((debt: any) => {
                   const paymentRecord = allDebtPayments.find((dp: any) => dp.debt_id == debt.id && dp.paid_month === currentMonthId);
                   const debtIsPaidThisMonth = !!paymentRecord;
-                  const statementTotalDue = n(debt.monthly_due) + n(debt.arrears_balance) - n(debt.float_balance)
+                  const statementTotalDue = n(debt.monthly_due) + n(debt.arrears_balance) - n(debt.float_balance);
                   const actualAmountPaid = paymentRecord?.amount_paid ? Number(paymentRecord.amount_paid) : statementTotalDue;
-                  const isExpanded = expandedDebtId == String(debt.id)
+                  const isExpanded = expandedDebtId == String(debt.id);
                   
                   // DYNAMIC ARREARS & PRINCIPAL AGEING LOGIC
                   let currentArrears = n(debt.arrears_balance);
                   let currentPrincipal = n(debt.total_debt_amount);
                   
                   if (debtIsPaidThisMonth) {
-                    // Formula dinamik: Tunggakan sedia ada + (Ansuran Bulanan - Amaun yang dibayar)
                     currentArrears = Math.max(0, currentArrears + n(debt.monthly_due) - actualAmountPaid);
-                    // Tolak principal secara visual (anggaran awal sebelum disegerak dengan bank)
                     currentPrincipal = Math.max(0, currentPrincipal - actualAmountPaid);
                   }
                   
@@ -1540,7 +1394,7 @@ export default async function Home(props: any = {}) {
                             {n(debt.float_balance) > 0 && <p className="text-teal-400">Credit: -RM {n(debt.float_balance).toFixed(2)}</p>}
                           </div>
                           
-                          <a href={`?month=${currentSelectedMonth}${isExpanded ? '' : `&details=${debt.id}`}${isEditing ? '&edit=true' : ''}`} className="text-[9px] sm:text-[10px] text-teal-400 hover:text-teal-300 mt-2 inline-block transition-colors uppercase tracking-widest font-bold">{isExpanded ? 'Hide ▲' : 'Details ▼'}</a>
+                          <button onClick={() => setExpandedDebtId(isExpanded ? null : String(debt.id))} className="text-[9px] sm:text-[10px] text-teal-400 hover:text-teal-300 mt-2 inline-block transition-colors uppercase tracking-widest font-bold">{isExpanded ? 'Hide ▲' : 'Details ▼'}</button>
                         </div>
 
                         {/* HIGHLY CUSTOM TRANSACTION-READY INPUT FIELD REPLICA */}
@@ -1559,7 +1413,7 @@ export default async function Home(props: any = {}) {
                             ) : (
                               <div className="flex items-center gap-1.5 sm:gap-2">
                                 {debtIsPaidThisMonth && (
-                                  <form action={undoDebtPayment}>
+                                  <form onSubmit={(e) => { e.preventDefault(); onUndoDebtPayment(new FormData(e.currentTarget)); }}>
                                     <input type="hidden" name="id" value={debt.id} />
                                     <input type="hidden" name="monthId" value={currentMonthId} />
                                     <button type="submit" className="text-[8px] sm:text-[9px] font-bold uppercase tracking-widest px-3 py-2 bg-[#0b0e14] text-[#8a93a6] border border-[#272b38] hover:bg-[#161a23] rounded-lg transition-all" title="Undo All Payments">
@@ -1567,7 +1421,7 @@ export default async function Home(props: any = {}) {
                                     </button>
                                   </form>
                                 )}
-                                <form action={payDebt} className="flex items-center gap-1.5 sm:gap-2">
+                                <form onSubmit={(e) => { e.preventDefault(); onPayDebt(new FormData(e.currentTarget)); }} className="flex items-center gap-1.5 sm:gap-2">
                                   <input type="hidden" name="id" value={debt.id} />
                                   <input type="hidden" name="monthId" value={currentMonthId} />
                                   <div className="flex items-center bg-[#0b0e14] border border-[#272b38] rounded-lg p-0.5 focus-within:border-amber-500/50 transition-colors">
@@ -1670,7 +1524,7 @@ export default async function Home(props: any = {}) {
                                               textClass = 'text-teal-400';
                                               borderClass = 'border-teal-500/40';
                                           } else if (isMonthPaid && actualAmountPaid < n(debt.monthly_due)) {
-                                              content = 'P'; // Indicates Partial Payment Fallback
+                                              content = 'P'; 
                                               textClass = 'text-rose-400';
                                               bgClass = 'bg-rose-500/10';
                                               borderClass = 'border-rose-500/40';
@@ -1685,7 +1539,6 @@ export default async function Home(props: any = {}) {
                                               borderClass = 'border-[#383e52] border-dashed';
                                           }
                                         } else {
-                                          // Displays the verified credit index for unpaid past months
                                           content = arrearsCount > 0 ? String(arrearsCount) : '1';
                                           bgClass = 'bg-rose-500/10';
                                           textClass = 'text-rose-400';
@@ -1710,7 +1563,7 @@ export default async function Home(props: any = {}) {
                                           </div>
                                           {i < 11 && <div className={`flex-1 h-0.5 -mx-0.5 md:-mx-1 ${lineClass}`} />}
                                         </div>
-                                      )
+                                      );
                                     })}
                                   </div>
                                 </div>
@@ -1727,7 +1580,7 @@ export default async function Home(props: any = {}) {
                         </div>
                       )}
                     </div>
-                  )
+                  );
                 })}
               </div>
 
@@ -1765,12 +1618,12 @@ export default async function Home(props: any = {}) {
                         
                         {/* Minimalist Border Progress Bar */}
                         <div className="w-full h-px bg-[#272b38] relative mt-1">
-                          {/* Green Base Bar (Capital Recovery up to 100%) */}
+                          {/* Green Base Bar */}
                           <div 
                             className="absolute top-0 left-0 h-full bg-teal-500/60 shadow-[0_0_8px_rgba(45,212,191,0.4)] transition-all duration-1000 ease-out" 
                             style={{ width: `${c.greenWidth}%` }}
                           />
-                          {/* Blue Overlay Bar (Profit > 100%) */}
+                          {/* Blue Overlay Bar */}
                           {c.blueWidth > 0 && (
                             <div 
                               className="absolute top-0 left-0 h-full bg-blue-500/80 shadow-[0_0_8px_rgba(59,130,246,0.6)] transition-all duration-1000 ease-out z-10" 
@@ -1822,7 +1675,7 @@ export default async function Home(props: any = {}) {
                              );
                            }
                            return (
-                             <form key={day} action={toggleBsklPayment} className="aspect-square">
+                             <form key={day} onSubmit={(e) => { e.preventDefault(); onToggleBsklPayment(new FormData(e.currentTarget)); }} className="aspect-square">
                                <input type="hidden" name="contract_id" value={c.id} />
                                <input type="hidden" name="date" value={dateStr} />
                                <input type="hidden" name="amount" value={c.daily_rate} />
@@ -1835,14 +1688,14 @@ export default async function Home(props: any = {}) {
                            );
                         }
                         return (
-                          <a key={day} href={`?month=${currentSelectedMonth}&bsklModal=${dateStr}${isEditing ? '&edit=true' : ''}`} className="aspect-square rounded flex flex-col items-center justify-center transition-all border bg-[#161a23] border-[#383e52] hover:border-amber-500/40 p-0.5 sm:p-1 gap-0.5">
+                          <button key={day} onClick={() => setBsklModalDate(dateStr)} className="aspect-square rounded flex flex-col items-center justify-center transition-all border bg-[#161a23] border-[#383e52] hover:border-amber-500/40 p-0.5 sm:p-1 gap-0.5">
                              <span className="text-[8px] sm:text-[9px] font-normal text-[#8a93a6]/60 leading-none">{day}</span>
                              {dayContracts.map((c: any) => {
                                 const isPaid = bsklPayments.some((p: any) => p.contract_id === c.id && p.paid_date === dateStr);
                                 return <span key={c.id} className={`text-[8px] md:text-[9px] font-bold leading-none ${isPaid ? 'text-teal-400' : 'text-[#8a93a6]'}`}>{c.daily_rate}</span>
                              })}
-                          </a>
-                        )
+                          </button>
+                        );
                       })}
                     </div>
                     <div className="flex gap-3 sm:gap-4 mt-6 justify-center text-[9px] font-bold text-[#8a93a6] uppercase tracking-widest flex-wrap">
@@ -1863,7 +1716,7 @@ export default async function Home(props: any = {}) {
                 <div className="bg-[#161a23] border border-[#272b38] rounded-xl shadow-sm overflow-hidden hover:border-[#383e52] transition-colors p-4 sm:p-5 md:p-6">
                    
                    {!isReadOnly && (
-                      <form action={addCashInflow} className="flex flex-col sm:flex-row gap-3 mb-6">
+                      <form onSubmit={(e) => { e.preventDefault(); onAddCashInflow(new FormData(e.currentTarget)); e.currentTarget.reset(); }} className="flex flex-col sm:flex-row gap-3 mb-6">
                           <input type="hidden" name="monthId" value={currentMonthId} />
                           <div className="flex-1">
                              <label className="text-[9px] text-[#8a93a6] block mb-1.5 uppercase tracking-widest font-bold">Particular</label>
@@ -1883,9 +1736,9 @@ export default async function Home(props: any = {}) {
                    <div className="bg-[#0b0e14] rounded-lg border border-[#272b38] p-3 space-y-1.5 font-mono text-[9px] text-[#8a93a6] max-h-[150px] overflow-y-auto scrollbar-thin">
                       <div className="flex justify-between items-center border-b border-[#272b38]/50 pb-1.5 mb-1.5">
                         <p className="text-[8px] font-bold text-slate-500 uppercase tracking-widest">Sub-Ledger Transactions</p>
-                        <a href={`?month=${currentSelectedMonth}&log=true${isEditing ? '&edit=true' : ''}`} className="text-[7px] bg-[#161a23] text-emerald-400 border border-[#383e52] hover:border-emerald-500/40 hover:bg-emerald-500/10 px-2 py-0.5 rounded transition-all uppercase tracking-widest shadow-sm">
+                        <button onClick={() => setIsLogOpen(true)} className="text-[7px] bg-[#161a23] text-emerald-400 border border-[#383e52] hover:border-emerald-500/40 hover:bg-emerald-500/10 px-2 py-0.5 rounded transition-all uppercase tracking-widest shadow-sm">
                           Details &raquo;
-                        </a>
+                        </button>
                       </div>
                       {cashInflows.filter((i: any) => i.month_id === currentMonthId).length === 0 && <p className="text-center py-2 opacity-50">No inflows recorded this month.</p>}
                       {cashInflows.filter((i: any) => i.month_id === currentMonthId).map((item: any) => (
@@ -1912,10 +1765,10 @@ export default async function Home(props: any = {}) {
                 <div className="bg-[#161a23] border border-[#272b38] border-dashed rounded-xl p-8 sm:p-10 flex flex-col items-center justify-center text-center gap-4 sm:gap-5">
                   <p className="text-[#8a93a6] text-sm">No operating budgets allocated for {formattedMonthDisplay} yet.</p>
                   {!isReadOnly && (
-                    <form action={duplicatePreviousBudgets}>
+                    <form onSubmit={(e) => { e.preventDefault(); onDuplicatePreviousBudgets(new FormData(e.currentTarget)); }}>
                       <input type="hidden" name="currentMonth" value={currentSelectedMonth} />
                       <input type="hidden" name="prevMonth" value={prevMonthStr} />
-                      <button type="submit" className="text-xs font-bold uppercase tracking-widest px-5 py-2.5 sm:px-6 sm:py-3 rounded-full border border-teal-500/40 text-teal-400 bg-teal-500/10 hover:bg-teal-500/20 transition-all shadow-[0_0_10px_rgba(20,184,166,0.1)]">
+                      <button type="submit" className="text-xs font-bold uppercase tracking-widest px-5 py-2.5 sm:px-6 sm:py-3 rounded-full border border-[#272b38]/40 text-teal-400 bg-teal-500/10 hover:bg-teal-500/20 transition-all shadow-[0_0_10px_rgba(20,184,166,0.1)]">
                         Import Previous Month's Budgets
                       </button>
                     </form>
@@ -1935,11 +1788,11 @@ export default async function Home(props: any = {}) {
                         
                         <div>
                           <div className="flex justify-between items-start gap-2">
-                            <span className={`text-base sm:text-lg font-bold tracking-tight leading-tight ${budget.is_saved ? 'text-[#8a93a6] line-through' : 'text-white'}`}>{budget.category}</span>
+                            <span className={`text-base sm:text-lg font-bold tracking-tight leading-tight ${budget.is_saved ? 'text-[#8a93a6]' : 'text-white'}`}>{budget.category}</span>
                             <span className="text-[9px] sm:text-[10px] text-[#8a93a6] font-mono bg-[#0b0e14] border border-[#272b38] px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-md uppercase tracking-wider flex-shrink-0">Allocated: RM {allocated.toFixed(2)}</span>
                           </div>
                           
-                          {/* Minimalist Border Progress Bar */}
+                          {/* Minimalist Progress Bar */}
                           <div className="w-full h-px bg-[#272b38] mt-3 sm:mt-4">
                             <div 
                               className={`h-full transition-all duration-1000 ease-out ${budget.is_saved ? 'bg-teal-500/20' : (remainingPct <= 20 ? 'bg-rose-500/80 shadow-[0_0_8px_rgba(244,63,94,0.4)]' : 'bg-teal-500/60 shadow-[0_0_8px_rgba(45,212,191,0.3)]')}`} 
@@ -1957,16 +1810,16 @@ export default async function Home(props: any = {}) {
                           ) : (
                             <div className="flex-1 space-y-2">
                               <label className="text-[9px] text-[#8a93a6] uppercase tracking-[0.1em] font-bold block">Execute Transaction / Virement (RM)</label>
-                              <form action={executeBudgetAction} className="space-y-3">
+                              <form onSubmit={(e) => { e.preventDefault(); }} className="space-y-3">
                                 <input type="hidden" name="budgetId" value={budget.id} />
                                 <input type="hidden" name="currentAllocated" value={allocated} />
                                 <input type="hidden" name="currentSpent" value={spent} />
-                                <input name="amount" type="number" step="0.01" placeholder="0.00" disabled={budget.is_saved} className="w-full bg-[#0b0e14] border border-[#272b38] rounded-lg px-2.5 py-2 text-white text-sm outline-none disabled:opacity-50 focus:border-amber-500/50 transition-colors" />
+                                <input name="amount" type="number" step="0.01" placeholder="0.00" disabled={budget.is_saved} className="w-full bg-[#0b0e14] border border-[#272b38] rounded-lg px-2.5 py-2 text-white text-xs outline-none disabled:opacity-50 focus:border-amber-500/50 transition-colors" />
                                 {!budget.is_saved && (
                                   <div className="grid grid-cols-3 gap-2">
-                                    <button type="submit" name="actionType" value="spent" className="text-[9px] sm:text-[10px] uppercase tracking-widest font-black py-2.5 bg-rose-600/20 text-rose-400 border border-rose-500/30 rounded-lg hover:bg-rose-600 hover:text-white transition-all shadow-[0_0_8px_rgba(225,29,72,0.1)]">Spent</button>
-                                    <button type="submit" name="actionType" value="add" className="text-[9px] sm:text-[10px] uppercase tracking-widest font-black py-2.5 bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 rounded-lg hover:bg-emerald-600 hover:text-white transition-all shadow-[0_0_8px_rgba(16,185,129,0.1)]">Add</button>
-                                    <button type="submit" name="actionType" value="reduce" className="text-[9px] sm:text-[10px] uppercase tracking-widest font-black py-2.5 bg-blue-600/20 text-blue-400 border border-blue-500/30 rounded-lg hover:bg-blue-600 hover:text-white transition-all shadow-[0_0_8px_rgba(37,99,235,0.1)]">Reduce</button>
+                                    <button onClick={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget.form!); fd.append('actionType', 'spent'); onExecuteBudgetAction(fd); }} className="text-[9px] sm:text-[10px] uppercase tracking-widest font-black py-2.5 bg-rose-600/20 text-rose-400 border border-rose-500/30 rounded-lg hover:bg-rose-600 hover:text-white transition-all shadow-[0_0_8px_rgba(225,29,72,0.1)]">Spent</button>
+                                    <button onClick={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget.form!); fd.append('actionType', 'add'); onExecuteBudgetAction(fd); }} className="text-[9px] sm:text-[10px] uppercase tracking-widest font-black py-2.5 bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 rounded-lg hover:bg-emerald-600 hover:text-white transition-all shadow-[0_0_8px_rgba(16,185,129,0.1)]">Add</button>
+                                    <button onClick={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget.form!); fd.append('actionType', 'reduce'); onExecuteBudgetAction(fd); }} className="text-[9px] sm:text-[10px] uppercase tracking-widest font-black py-2.5 bg-blue-600/20 text-blue-400 border border-blue-500/30 rounded-lg hover:bg-blue-600 hover:text-white transition-all shadow-[0_0_8px_rgba(37,99,235,0.1)]">Reduce</button>
                                   </div>
                                 )}
                               </form>
@@ -1983,13 +1836,13 @@ export default async function Home(props: any = {}) {
                           <div className="bg-[#0b0e14] rounded-lg border border-[#272b38] p-3 space-y-1.5 font-mono text-[9px] text-[#8a93a6] max-h-[110px] overflow-y-auto scrollbar-thin">
                             <div className="flex justify-between items-center border-b border-[#272b38]/50 pb-1.5 mb-1.5">
                               <p className="text-[8px] font-bold text-slate-500 uppercase tracking-widest">Sub-Ledger Transactions</p>
-                              <a href={`?month=${currentSelectedMonth}&log=true${isEditing ? '&edit=true' : ''}`} className="text-[7px] bg-[#161a23] text-teal-400 border border-[#383e52] hover:border-teal-500/40 hover:bg-teal-500/10 px-2 py-0.5 rounded transition-all uppercase tracking-widest shadow-sm">
+                              <button onClick={() => setIsLogOpen(true)} className="text-[7px] bg-[#161a23] text-teal-400 border border-[#383e52] hover:border-teal-500/40 hover:bg-teal-500/10 px-2 py-0.5 rounded transition-all uppercase tracking-widest shadow-sm">
                                 Details &raquo;
-                              </a>
+                              </button>
                             </div>
                             {logs.map((log: any) => {
-                              let prefix = '-'
-                              let colorClass = 'text-rose-400'
+                              let prefix = '-';
+                              let colorClass = 'text-rose-400';
                               if (log.transaction_type === 'add') { prefix = '+'; colorClass = 'text-emerald-400'; }
                               if (log.transaction_type === 'reduce') { prefix = '-'; colorClass = 'text-blue-400'; }
                               return (
@@ -1998,7 +1851,7 @@ export default async function Home(props: any = {}) {
                                   <span className="uppercase tracking-wide text-[8px] opacity-60">[{log.transaction_type}]</span>
                                   <span className={`font-bold ${colorClass}`}>{prefix}RM {Number(log.amount).toFixed(2)}</span>
                                 </div>
-                              )
+                              );
                             })}
                           </div>
                         )}
@@ -2012,7 +1865,7 @@ export default async function Home(props: any = {}) {
                               {!isReadOnly && (
                                 <>
                                   <div className="w-px h-4 bg-[#272b38]"></div>
-                                  <form action={undoSavings}>
+                                  <form onSubmit={(e) => { e.preventDefault(); onUndoSavings(new FormData(e.currentTarget)); }}>
                                     <input type="hidden" name="id" value={budget.id} />
                                     <button type="submit" className="text-[9px] uppercase tracking-widest font-bold text-[#8a93a6] hover:text-white transition-colors">Undo</button>
                                   </form>
@@ -2021,7 +1874,7 @@ export default async function Home(props: any = {}) {
                             </div>
                           ) : (
                             !isReadOnly && (
-                              <form action={sendToSavings}>
+                              <form onSubmit={(e) => { e.preventDefault(); onSendToSavings(new FormData(e.currentTarget)); }}>
                                 <input type="hidden" name="id" value={budget.id} />
                                 <button type="submit" disabled={remaining <= 0} className="text-[10px] uppercase tracking-widest font-bold px-4 py-2 sm:px-5 sm:py-2.5 rounded-full border border-teal-500/40 text-teal-400 bg-teal-500/10 hover:bg-teal-500/20 transition-all disabled:opacity-30 disabled:hover:bg-teal-500/10">Approve & Send to Pool</button>
                               </form>
@@ -2030,7 +1883,7 @@ export default async function Home(props: any = {}) {
                         </div>
 
                       </div>
-                    )
+                    );
                   })}
                 </div>
               )}
@@ -2039,5 +1892,5 @@ export default async function Home(props: any = {}) {
         </div>
       </main>
     </>
-  )
+  );
 }

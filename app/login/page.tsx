@@ -10,7 +10,7 @@ export default async function LoginPage({
   const sp = await searchParams
   const hasError = sp.error === 'true'
 
-  // This is the server action that authenticates you
+  // Server action that authenticates the user
   const signIn = async (formData: FormData) => {
     'use server'
     const email = formData.get('email') as string
@@ -41,7 +41,7 @@ export default async function LoginPage({
       return redirect('/login?error=true')
     }
 
-    // If successful, send them to the dashboard
+    // Redirect to dashboard on success
     return redirect('/')
   }
 
