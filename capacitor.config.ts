@@ -1,10 +1,9 @@
-// capacitor.config.ts
 import { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.financepulse.app',
-  appName: 'FinaPulse',
-  webDir: 'out', // Ini mesti sama dengan nama folder yang terhasil selepas 'npm run build'
+  appId: 'com.finapulse.app', // (Pastikan ID anda betul)
+  appName: 'Finance Pulse',
+  webDir: 'out', // <--- INI MESTI 'out' BUKAN 'build' ATAU 'dist'
   server: {
     androidScheme: 'https'
   }
