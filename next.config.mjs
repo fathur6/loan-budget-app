@@ -1,8 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: 'export', // Penting untuk Capacitor
+  // Hanya gunakan export jika kita membina untuk mobile (Capacitor)
+  output: process.env.IS_CAPACITOR ? 'export' : undefined,
   images: { 
-    unoptimized: true // Penting untuk elak isu imej
+    unoptimized: true 
   },
 };
 
