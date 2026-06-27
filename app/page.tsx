@@ -1625,7 +1625,7 @@ export default async function Home(props: any = {}) {
                         {c.is_active && (
                           <div className="flex gap-2 mt-2 pt-2 border-t border-[#272b38]">
                             <button formAction={updateBsklContract} className="flex-1 bg-blue-500/10 text-blue-400 border border-blue-500/30 hover:bg-blue-500/20 font-bold py-2 rounded-lg transition-colors text-[10px] uppercase tracking-widest">Edit / Save</button>
-                            <button formAction={endBsklContract} className="flex-1 bg-[#161a23] text-rose-400 border border-[#383e52] hover:bg-rose-500/10 hover:border-rose-500/40 font-bold py-2 rounded-lg transition-colors text-[10px] uppercase tracking-widest">End</button>
+                            <button formAction={endBsklContract} className="flex-1 bg-[#161a23] text-rose-400 border border-[#383e52] hover:bg-rose-500/10 hover:border-rose-500/40 font-bold py-2 rounded-lg transition-colors text-[10px] uppercase tracking-widest">finalize</button>
                           </div>
                         )}
                       </form>
@@ -2077,8 +2077,8 @@ export default async function Home(props: any = {}) {
                             <div className="relative w-full h-5 bg-[#0b0e14] rounded-full border border-[#272b38] overflow-visible">
                               <div style={{ width: `${c.tier1Width}%` }} className="absolute top-0 left-0 h-full bg-gradient-to-r from-teal-600 to-teal-400 rounded-l-full transition-all duration-700 ease-out" />
                               <div style={{ width: `${c.tier2Width}%`, left: `${c.markerPct}%` }} className={`absolute top-0 h-full bg-gradient-to-r from-purple-600 to-purple-400 transition-all duration-700 ease-out ${c.maxedOutTier2 ? 'rounded-r-full' : ''}`} />
-                              <div style={{ left: `${c.markerPct}%` }} className="absolute top-[-3px] w-[2px] h-[28px] bg-slate-400 shadow-[0_0_6px_rgba(255,255,255,0.3)] z-10 pointer-events-none">
-                                <span className="absolute bottom-[-16px] left-1/2 transform -translate-x-1/2 text-[8px] font-mono text-[#8a93a6] whitespace-nowrap font-bold">
+                              <div style={{ left: `${c.markerPct}%` }} className="absolute top-[-3px] w-[2px] h-[28px] bg-teal-400/70 shadow-[0_0_6px_rgba(45,212,191,0.5)] z-10 pointer-events-none">
+                                <span className="absolute bottom-[-16px] left-1/2 transform -translate-x-1/2 text-[8px] font-mono text-teal-400 whitespace-nowrap font-bold tracking-wide">
                                   T1 (RM {c.tier1Cap.toFixed(0)})
                                 </span>
                               </div>
