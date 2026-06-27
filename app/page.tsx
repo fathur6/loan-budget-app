@@ -419,6 +419,7 @@ async function addBsklContract(formData: FormData) {
   const t1Cap = Number(formData.get('tier1Cap') ?? 0)
   const t2Rate = Number(formData.get('tier2Rate') ?? 0)
   const t2Cap = Number(formData.get('tier2Cap') ?? 0)
+  const t1TargetDays = Number(formData.get('t1TargetDays') ?? 24)
 
   await supabase.from('bskl_contracts').insert({
     name,
@@ -429,7 +430,8 @@ async function addBsklContract(formData: FormData) {
     tier1_daily_rate: t1Rate,
     tier1_cap: t1Cap,
     tier2_daily_rate: t2Rate,
-    tier2_cap: t2Cap
+    tier2_cap: t2Cap,
+    t1_target_days: t1TargetDays
   })
   revalidatePath('/')
 }
@@ -449,6 +451,7 @@ async function updateBsklContract(formData: FormData) {
   const t1Cap = Number(formData.get('tier1Cap') ?? 0)
   const t2Rate = Number(formData.get('tier2Rate') ?? 0)
   const t2Cap = Number(formData.get('tier2Cap') ?? 0)
+  const t1TargetDays = Number(formData.get('t1TargetDays') ?? 24)
 
   await supabase.from('bskl_contracts').update({
     name,
@@ -458,7 +461,8 @@ async function updateBsklContract(formData: FormData) {
     tier1_daily_rate: t1Rate,
     tier1_cap: t1Cap,
     tier2_daily_rate: t2Rate,
-    tier2_cap: t2Cap
+    tier2_cap: t2Cap,
+    t1_target_days: t1TargetDays
   }).eq('id', id)
   revalidatePath('/')
 }
@@ -739,6 +743,52 @@ export default async function Home(props: any = {}) {
   let totalBsklCapitalAllTime = 0;
   let totalBsklRepaidAllTime = 0;
 
+  // --- SEQUENTIAL TRADING DAY ENGINE ---
+  // Determines the active rate for a contract on a given date based on
+  // valid trading day count since effective_date, considering weekends,
+  // holidays, and collected payments. Missed days (non-collected) push
+  // the T1→T2 transition forward naturally (slippage).
+  const getDayStatus = (contract: any, dateStr: string): { rate: number; status: string; tradingDayIndex: number } => {
+    const eff = contract.effective_date
+    if (!eff || dateStr < eff) return { rate: 0, status: 'CLOSED', tradingDayIndex: 0 }
+    
+    const t1Target = n(contract.t1_target_days) || 24
+    const t1Rate = n(contract.tier1_daily_rate) || n(contract.daily_rate)
+    const t2Rate = n(contract.tier2_daily_rate)
+    const cPayments = bsklPayments.filter((p: any) => p.contract_id === contract.id)
+    
+    let tradingDayCount = 0
+    const start = new Date(eff)
+    const target = new Date(dateStr)
+    
+    // Count valid trading days from effective_date up to and including target date
+    for (let d = new Date(start); d <= target; d.setDate(d.getDate() + 1)) {
+      const dStr = d.toISOString().split('T')[0]
+      const dow = d.getDay()
+      const isWeekend = dow === 0 || dow === 6
+      const isHoliday = bsklHolidays.some((h: any) => h.holiday_date === dStr)
+      const isCollected = cPayments.some((p: any) => p.paid_date === dStr)
+      
+      if (isWeekend || isHoliday) continue
+      if (isCollected) tradingDayCount++
+      else if (dStr <= dateStr) tradingDayCount++ // Future trading days count too (projected)
+    }
+    
+    const activeRate = tradingDayCount <= t1Target ? t1Rate : t2Rate
+    const pastTarget = new Date(dateStr) < new Date(new Date().toISOString().split('T')[0])
+    const isCollectedToday = cPayments.some((p: any) => p.paid_date === dateStr)
+    
+    let status = 'TRADING_DAY'
+    if (isCollectedToday) status = 'COLLECTED'
+    
+    const dow = new Date(dateStr).getDay()
+    const isWeekend = dow === 0 || dow === 6
+    const isHoliday = bsklHolidays.some((h: any) => h.holiday_date === dateStr)
+    if (isWeekend || isHoliday) status = 'HOLIDAY'
+    
+    return { rate: activeRate, status, tradingDayIndex: tradingDayCount }
+  }
+
   const enrichedContracts = bsklContracts.map((c: any) => {
     const cCapital = n(c.capital_injection);
     const cPayments = bsklPayments.filter((p: any) => p.contract_id === c.id);
@@ -754,16 +804,16 @@ export default async function Home(props: any = {}) {
     const tier1Cap = n(c.tier1_cap);
     const tier2Rate = n(c.tier2_daily_rate);
     const tier2Cap = n(c.tier2_cap);
-    const hasTwoTier = tier1Cap > 0 && tier2Cap > 0;
+    const hasTwoTier = tier1Rate > 0 && tier2Rate > 0;
     
-    // Active tier determination
-    const currentTier = hasTwoTier
-      ? (cTotalRepaid >= tier1Cap ? 2 : 1)
-      : 1;
-    const isTier2Active = currentTier === 2;
-    const activeDailyRate = hasTwoTier
-      ? (isTier2Active ? tier2Rate : tier1Rate)
-      : (tier1Rate || n(c.daily_rate));
+    // Sequential trading day engine: determine tier based on valid trading days
+    const today = new Date().toISOString().split('T')[0];
+    const todayEngine = getDayStatus(c, today);
+    const activeDailyRate = hasTwoTier ? todayEngine.rate : (tier1Rate || n(c.daily_rate));
+    const engineTradingDayIndex = todayEngine.tradingDayIndex;
+    const t1TargetDays = n(c.t1_target_days) || 24;
+    const isTier2Active = hasTwoTier && engineTradingDayIndex > t1TargetDays;
+    const currentTier = isTier2Active ? 2 : 1;
     
     // Two-tier progress bar widths (proportional to tier2Cap which is the final target T2)
     const totalTarget = hasTwoTier ? tier2Cap : cCapital;
@@ -798,7 +848,8 @@ export default async function Home(props: any = {}) {
       recoveryPct, greenWidth, blueWidth,
       hasTwoTier, currentTier, isTier2Active, activeDailyRate,
       tier1Rate, tier1Cap, tier2Rate, tier2Cap, totalTarget,
-      markerPct, tier1Width, tier2Width, showSplitBar, maxedOutTier2 };
+      markerPct, tier1Width, tier2Width, showSplitBar, maxedOutTier2,
+      t1TargetDays, engineTradingDayIndex };
   });
 
   // --- BUDGET & POOL CALCULATIONS ---
@@ -973,7 +1024,11 @@ export default async function Home(props: any = {}) {
                   const cEndDate = c.end_date || '2099-12-31';
                   return bsklModalDate >= cEffDate && bsklModalDate <= cEndDate;
                 }).map((c: any) => {
-                  const isPaid = bsklPayments.some((p: any) => p.contract_id === c.id && p.paid_date === bsklModalDate);
+                  const modalDayEngine = getDayStatus(c, bsklModalDate);
+                  const modalRate = modalDayEngine.rate;
+                  const modalStatus = modalDayEngine.status;
+                  const isPaid = modalStatus === 'COLLECTED';
+                  const modalTier = c.hasTwoTier ? (modalDayEngine.tradingDayIndex > c.t1TargetDays ? 2 : 1) : 1;
                   
                    if ((isReadOnly || isMonthClosed)) {
                     return (
@@ -981,8 +1036,8 @@ export default async function Home(props: any = {}) {
                         <div>
                           <p className={`font-bold ${isPaid ? 'text-teal-400' : 'text-white'}`}>{c.name}</p>
                           <p className="text-[10px] text-[#8a93a6] uppercase tracking-widest mt-1">
-                            RM {c.activeDailyRate.toFixed(2)}
-                            {c.showSplitBar && <span className={`ml-1 ${c.isTier2Active ? 'text-purple-400' : 'text-teal-400'}`}>(T{c.currentTier})</span>}
+                            {modalRate > 0 ? `RM ${modalRate.toFixed(2)}` : 'Closed'}
+                            {c.hasTwoTier && modalRate > 0 && <span className={`ml-1 ${modalTier === 2 ? 'text-purple-400' : 'text-teal-400'}`}>(T{modalTier})</span>}
                           </p>
                         </div>
                         <span className="text-[9px] font-bold text-[#8a93a6] uppercase bg-[#161a23] px-3 py-1.5 border border-[#272b38] rounded-md tracking-widest">
@@ -996,13 +1051,13 @@ export default async function Home(props: any = {}) {
                     <form key={c.id} action={toggleBsklPayment} className={`flex justify-between items-center p-4 rounded-xl border ${isPaid ? 'bg-teal-500/10 border-teal-500/30' : 'bg-[#0b0e14] border-[#383e52]'}`}>
                       <input type="hidden" name="contract_id" value={c.id} />
                       <input type="hidden" name="date" value={bsklModalDate} />
-                      <input type="hidden" name="amount" value={c.activeDailyRate} />
+                      <input type="hidden" name="amount" value={modalRate} />
                       <input type="hidden" name="isPaid" value={String(isPaid)} />
                       <div>
                         <p className={`font-bold ${isPaid ? 'text-teal-400' : 'text-white'}`}>{c.name}</p>
                         <p className="text-[10px] text-[#8a93a6] uppercase tracking-widest mt-1">
-                          RM {c.activeDailyRate.toFixed(2)}
-                          {c.showSplitBar && <span className={`ml-1 ${c.isTier2Active ? 'text-purple-400' : 'text-teal-400'}`}>(T{c.currentTier})</span>}
+                          {modalRate > 0 ? `RM ${modalRate.toFixed(2)}` : 'Closed'}
+                          {c.hasTwoTier && modalRate > 0 && <span className={`ml-1 ${modalTier === 2 ? 'text-purple-400' : 'text-teal-400'}`}>(T{modalTier})</span>}
                         </p>
                       </div>
                       <button type="submit" className={`text-[10px] uppercase tracking-widest font-black px-4 py-2 rounded-lg transition-colors border ${isPaid ? 'bg-[#161a23] text-[#8a93a6] border-[#383e52] hover:bg-[#272b38]' : 'bg-teal-500/20 text-teal-400 border-teal-500/50 hover:bg-teal-500/30 shadow-[0_0_10px_rgba(20,184,166,0.15)]'}`}>
@@ -1518,7 +1573,7 @@ export default async function Home(props: any = {}) {
                               </div>
                               <div className="border-t border-[#272b38]/30 pt-2">
                                 <label className="text-[8px] text-teal-400 uppercase tracking-widest font-bold block mb-2">Tier 1 — Initial Engine</label>
-                                <div className="grid grid-cols-2 gap-3">
+                                <div className="grid grid-cols-3 gap-3">
                                   <div>
                                     <label className="text-[8px] text-[#8a93a6] uppercase tracking-widest">Rate / Day (T1)</label>
                                     <input name="tier1Rate" type="number" step="0.01" required defaultValue={n(c.tier1_daily_rate || c.daily_rate).toFixed(2)} className="w-full bg-[#161a23] border border-teal-500/20 rounded px-2 py-1 text-teal-400 font-mono text-xs mt-1 outline-none focus:border-teal-500/50" />
@@ -1526,6 +1581,10 @@ export default async function Home(props: any = {}) {
                                   <div>
                                     <label className="text-[8px] text-[#8a93a6] uppercase tracking-widest">Cap (Amount T1)</label>
                                     <input name="tier1Cap" type="number" step="0.01" required defaultValue={n(c.tier1_cap).toFixed(2)} className="w-full bg-[#161a23] border border-teal-500/20 rounded px-2 py-1 text-teal-300 font-mono text-xs mt-1 outline-none focus:border-teal-500/50" />
+                                  </div>
+                                  <div>
+                                    <label className="text-[8px] text-[#8a93a6] uppercase tracking-widest">Target Days</label>
+                                    <input name="t1TargetDays" type="number" step="1" required defaultValue={n(c.t1_target_days) || 24} className="w-full bg-[#161a23] border border-teal-500/20 rounded px-2 py-1 text-teal-300 font-mono text-xs mt-1 outline-none focus:border-teal-500/50" />
                                   </div>
                                 </div>
                               </div>
@@ -1591,7 +1650,7 @@ export default async function Home(props: any = {}) {
                         </div>
                         <div className="border-t border-[#272b38]/30 pt-3">
                           <label className="text-[9px] text-teal-400 uppercase tracking-widest font-bold block mb-2">Tier 1 — Initial Engine</label>
-                          <div className="grid grid-cols-2 gap-3">
+                          <div className="grid grid-cols-3 gap-3">
                             <div>
                               <label className="text-[8px] text-[#8a93a6] uppercase tracking-widest">Rate / Day (T1)</label>
                               <input name="tier1Rate" type="number" step="0.01" required className="w-full bg-[#0b0e14] border border-teal-500/20 rounded-lg px-2.5 py-2 text-teal-400 font-mono text-xs outline-none focus:border-teal-500/50 transition-colors" />
@@ -1599,6 +1658,10 @@ export default async function Home(props: any = {}) {
                             <div>
                               <label className="text-[8px] text-[#8a93a6] uppercase tracking-widest">Cap (Amount T1)</label>
                               <input name="tier1Cap" type="number" step="0.01" required className="w-full bg-[#0b0e14] border border-teal-500/20 rounded-lg px-2.5 py-2 text-teal-300 font-mono text-xs outline-none focus:border-teal-500/50 transition-colors" />
+                            </div>
+                            <div>
+                              <label className="text-[8px] text-[#8a93a6] uppercase tracking-widest">Target Days</label>
+                              <input name="t1TargetDays" type="number" step="1" required defaultValue="24" className="w-full bg-[#0b0e14] border border-teal-500/20 rounded-lg px-2.5 py-2 text-teal-300 font-mono text-xs outline-none focus:border-teal-500/50 transition-colors" />
                             </div>
                           </div>
                         </div>
@@ -1980,7 +2043,7 @@ export default async function Home(props: any = {}) {
                             <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
                               <h3 className="text-base sm:text-lg font-bold text-white leading-tight">{c.name}</h3>
                               {!c.is_active && <span className="text-[8px] bg-[#0b0e14] text-[#8a93a6] px-1.5 py-0.5 rounded border border-[#383e52] uppercase tracking-widest">ENDED</span>}
-                              {c.is_active && c.showSplitBar && (
+                              {c.is_active && c.hasTwoTier && (
                                 <span className={`text-[8px] font-bold px-2 py-0.5 rounded uppercase tracking-widest border ${c.isTier2Active ? 'bg-purple-500/10 text-purple-400 border-purple-500/30' : 'bg-teal-500/10 text-teal-400 border-teal-500/30'}`}>
                                   {c.isTier2Active ? 'Tier 2 Active' : 'Tier 1 Active'}
                                 </span>
@@ -1990,9 +2053,10 @@ export default async function Home(props: any = {}) {
                               <p className="text-[10px] text-[#8a93a6] tracking-widest uppercase">
                                 RM {c.activeDailyRate.toFixed(2)} / Trading Day
                               </p>
-                              {c.showSplitBar && (
+                              {c.hasTwoTier && (
                                 <span className="text-[8px] text-[#8a93a6] tracking-widest">
-                                  {c.isTier2Active ? `(Tier 2: RM ${c.tier2Rate.toFixed(2)})` : `(Tier 1: RM ${c.tier1Rate.toFixed(2)})`}
+                                  Day {c.engineTradingDayIndex} / {c.t1TargetDays}
+                                  {c.isTier2Active ? ` (T2: RM ${c.tier2Rate.toFixed(2)})` : ` (T1: RM ${c.tier1Rate.toFixed(2)})`}
                                 </span>
                               )}
                             </div>
@@ -2072,35 +2136,39 @@ export default async function Home(props: any = {}) {
                         }
                         if (dayContracts.length === 1) {
                            const c = dayContracts[0];
-                           const isPaid = bsklPayments.some((p: any) => p.contract_id === c.id && p.paid_date === dateStr);
+                           const dayEngine = getDayStatus(c, dateStr);
+                           const dayRate = dayEngine.rate;
+                           const dayStatus = dayEngine.status;
+                           const isPaid = dayStatus === 'COLLECTED';
                            if ((isReadOnly || isMonthClosed)) {
-                              return (
-                                <div key={day} className={`aspect-square rounded flex flex-col items-center justify-center border p-0.5 sm:p-1 gap-0.5 ${isPaid ? 'bg-teal-500/10 border-teal-500/30' : 'bg-[#161a23] border-[#383e52]'}`}>
-                                  <span className={`text-[8px] sm:text-[9px] font-normal leading-none ${isPaid ? 'text-teal-400/60' : 'text-[#8a93a6]/60'}`}>{day}</span>
-                                  <span className={`text-[8px] sm:text-[11px] font-bold leading-none ${isPaid ? 'text-teal-400' : 'text-[#8a93a6]'}`}>{c.activeDailyRate.toFixed(2)}</span>
-                                </div>
-                              );
-                            }
-                            return (
-                              <form key={day} action={toggleBsklPayment} className="aspect-square">
-                                <input type="hidden" name="contract_id" value={c.id} />
-                                <input type="hidden" name="date" value={dateStr} />
-                                <input type="hidden" name="amount" value={c.activeDailyRate} />
-                                <input type="hidden" name="isPaid" value={String(isPaid)} />
-                                <button type="submit" className={`w-full h-full rounded flex flex-col items-center justify-center transition-all border p-0.5 sm:p-1 gap-0.5 ${isPaid ? 'bg-teal-500/10 border-teal-500/30 hover:bg-teal-500/20' : 'bg-[#161a23] border-[#383e52] hover:border-amber-500/40'}`}>
-                                  <span className={`text-[8px] sm:text-[9px] font-normal leading-none ${isPaid ? 'text-teal-400/60' : 'text-[#8a93a6]/60'}`}>{day}</span>
-                                  <span className={`text-[8px] sm:text-[11px] font-bold leading-none ${isPaid ? 'text-teal-400' : 'text-[#8a93a6]'}`}>{c.activeDailyRate.toFixed(2)}</span>
-                                </button>
-                              </form>
-                            );
+                             return (
+                               <div key={day} className={`aspect-square rounded flex flex-col items-center justify-center border p-0.5 sm:p-1 gap-0.5 ${isPaid ? 'bg-teal-500/10 border-teal-500/30' : (dayStatus === 'HOLIDAY' ? 'bg-[#0b0e14] border-[#272b38]/40' : 'bg-[#161a23] border-[#383e52]')}`}>
+                                 <span className={`text-[8px] sm:text-[9px] font-normal leading-none ${isPaid ? 'text-teal-400/60' : (dayStatus === 'HOLIDAY' ? 'text-[#383e52]' : 'text-[#8a93a6]/60')}`}>{day}</span>
+                                 {dayRate > 0 && <span className={`text-[8px] sm:text-[11px] font-bold leading-none ${isPaid ? 'text-teal-400' : 'text-[#8a93a6]'}`}>{dayRate.toFixed(2)}</span>}
+                               </div>
+                             );
+                           }
+                           return (
+                             <form key={day} action={toggleBsklPayment} className="aspect-square">
+                               <input type="hidden" name="contract_id" value={c.id} />
+                               <input type="hidden" name="date" value={dateStr} />
+                               <input type="hidden" name="amount" value={dayRate} />
+                               <input type="hidden" name="isPaid" value={String(isPaid)} />
+                               <button type="submit" className={`w-full h-full rounded flex flex-col items-center justify-center transition-all border p-0.5 sm:p-1 gap-0.5 ${isPaid ? 'bg-teal-500/10 border-teal-500/30 hover:bg-teal-500/20' : (dayStatus === 'HOLIDAY' ? 'bg-[#0b0e14] border-[#272b38]/40 cursor-default' : 'bg-[#161a23] border-[#383e52] hover:border-amber-500/40')}`}>
+                                 <span className={`text-[8px] sm:text-[9px] font-normal leading-none ${isPaid ? 'text-teal-400/60' : (dayStatus === 'HOLIDAY' ? 'text-[#383e52]' : 'text-[#8a93a6]/60')}`}>{day}</span>
+                                 {dayRate > 0 && <span className={`text-[8px] sm:text-[11px] font-bold leading-none ${isPaid ? 'text-teal-400' : 'text-[#8a93a6]'}`}>{dayRate.toFixed(2)}</span>}
+                               </button>
+                             </form>
+                           );
                         }
                         return (
                           <a key={day} href={`?month=${currentSelectedMonth}&bsklModal=${dateStr}${isEditing ? '&edit=true' : ''}`} className="aspect-square rounded flex flex-col items-center justify-center transition-all border bg-[#161a23] border-[#383e52] hover:border-amber-500/40 p-0.5 sm:p-1 gap-0.5">
                              <span className="text-[8px] sm:text-[9px] font-normal text-[#8a93a6]/60 leading-none">{day}</span>
-                              {dayContracts.map((c: any) => {
-                                 const isPaid = bsklPayments.some((p: any) => p.contract_id === c.id && p.paid_date === dateStr);
-                                 return <span key={c.id} className={`text-[8px] md:text-[9px] font-bold leading-none ${isPaid ? 'text-teal-400' : 'text-[#8a93a6]'}`}>{c.activeDailyRate.toFixed(2)}</span>
-                              })}
+                             {dayContracts.map((cc: any) => {
+                                const dd = getDayStatus(cc, dateStr);
+                                const paid = dd.status === 'COLLECTED';
+                                return <span key={cc.id} className={`text-[8px] md:text-[9px] font-bold leading-none ${paid ? 'text-teal-400' : 'text-[#8a93a6]'}`}>{dd.rate.toFixed(2)}</span>
+                             })}
                           </a>
                         )
                       })}
