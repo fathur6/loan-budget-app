@@ -343,6 +343,48 @@ async function undoSavings(formData: FormData) {
   revalidatePath('/')
 }
 
+// --- Carry Forward: Push remaining balance to same category next month ---
+async function carryForwardBudget(formData: FormData) {
+  'use server'
+  const supabasePath = "./supabase"
+  const cachePath = "next/cache"
+  const { supabase } = await import(supabasePath)
+  const { revalidatePath } = await import(cachePath)
+
+  const id = formData.get('id') as string
+  const category = formData.get('category') as string
+  const remaining = Number(formData.get('remaining') ?? 0)
+  const nextMonth = formData.get('nextMonth') as string
+
+  if (remaining <= 0) return
+
+  // 1. Mark current budget as saved (locked)
+  await supabase.from('budgets').update({ is_saved: true }).eq('id', id)
+
+  // 2. Upsert next month's budget for same category — add carried amount
+  const { data: existing } = await supabase.from('budgets')
+    .select('id, allocated_amount')
+    .eq('budget_month', nextMonth)
+    .eq('category', category)
+    .single()
+
+  if (existing) {
+    await supabase.from('budgets')
+      .update({ allocated_amount: Number(existing.allocated_amount ?? 0) + remaining })
+      .eq('id', existing.id)
+  } else {
+    await supabase.from('budgets').insert({
+      category,
+      allocated_amount: remaining,
+      budget_month: nextMonth,
+      spent_amount: 0,
+      is_saved: false
+    })
+  }
+
+  revalidatePath('/')
+}
+
 async function addBudget(formData: FormData) {
   'use server'
   const supabasePath = "./supabase"
@@ -916,6 +958,13 @@ export default async function Home(props: any = {}) {
   const rolloverSurplus = Math.max(0, totalInflowsThisMonth - totalOutflowsThisMonth)
   const shouldShowCloseMonth = !isReadOnly && !isMonthClosed && currentSalary > 0
   const rolledOverThisMonth = currentMonthStatus?.rollover_amount ? n(currentMonthStatus.rollover_amount) : 0
+
+  // Show carry-forward option only in the last 10 days of the current month
+  const todayDate = new Date()
+  const lastDayOfCurrentMonth = new Date(year, monthIndex + 1, 0).getDate()
+  const isLast10Days = (lastDayOfCurrentMonth - todayDate.getDate()) < 10
+    && todayDate.getFullYear() === year
+    && todayDate.getMonth() === monthIndex
 
   // --- CENTRALIZED TRANSACTION LOG ENGINE ---
   let systemLogs: any[] = [];
@@ -2351,10 +2400,26 @@ export default async function Home(props: any = {}) {
                             </div>
                           ) : (
                             !isReadOnly && !isMonthClosed && (
-                              <form action={sendToSavings}>
-                                <input type="hidden" name="id" value={budget.id} />
-                                <button type="submit" disabled={remaining <= 0} className="text-[10px] uppercase tracking-widest font-bold px-4 py-2 sm:px-5 sm:py-2.5 rounded-full border border-teal-500/40 text-teal-400 bg-teal-500/10 hover:bg-teal-500/20 transition-all disabled:opacity-30 disabled:hover:bg-teal-500/10">Approve & Send to Pool</button>
-                              </form>
+                              isLast10Days ? (
+                                <div className="flex items-center gap-3">
+                                  <form action={carryForwardBudget}>
+                                    <input type="hidden" name="id" value={budget.id} />
+                                    <input type="hidden" name="category" value={budget.category} />
+                                    <input type="hidden" name="remaining" value={remaining} />
+                                    <input type="hidden" name="nextMonth" value={`${nextMonthDate.getFullYear()}-${String(nextMonthDate.getMonth() + 1).padStart(2, '0')}-01`} />
+                                    <button type="submit" disabled={remaining <= 0} className="text-[10px] uppercase tracking-widest font-bold px-4 py-2 sm:px-5 sm:py-2.5 rounded-full border border-blue-500/30 text-blue-400 bg-transparent hover:bg-blue-500/10 transition-all disabled:opacity-30">Carry Forward</button>
+                                  </form>
+                                  <form action={sendToSavings}>
+                                    <input type="hidden" name="id" value={budget.id} />
+                                    <button type="submit" disabled={remaining <= 0} className="text-[10px] uppercase tracking-widest font-bold px-4 py-2 sm:px-5 sm:py-2.5 rounded-full border border-teal-500/40 text-teal-400 bg-teal-500/10 hover:bg-teal-500/20 transition-all disabled:opacity-30 disabled:hover:bg-teal-500/10">Approve & Send to Pool</button>
+                                  </form>
+                                </div>
+                              ) : (
+                                <form action={sendToSavings}>
+                                  <input type="hidden" name="id" value={budget.id} />
+                                  <button type="submit" disabled={remaining <= 0} className="text-[10px] uppercase tracking-widest font-bold px-4 py-2 sm:px-5 sm:py-2.5 rounded-full border border-teal-500/40 text-teal-400 bg-teal-500/10 hover:bg-teal-500/20 transition-all disabled:opacity-30 disabled:hover:bg-teal-500/10">Approve & Send to Pool</button>
+                                </form>
+                              )
                             )
                           )}
                         </div>
