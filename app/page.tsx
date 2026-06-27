@@ -414,15 +414,22 @@ async function addBsklContract(formData: FormData) {
 
   const name = formData.get('name') as string
   const capital = Number(formData.get('capital') ?? 0)
-  const rate = Number(formData.get('rate') ?? 0)
   const effectiveDate = formData.get('effectiveDate') as string
+  const t1Rate = Number(formData.get('tier1Rate') ?? 0)
+  const t1Cap = Number(formData.get('tier1Cap') ?? 0)
+  const t2Rate = Number(formData.get('tier2Rate') ?? 0)
+  const t2Cap = Number(formData.get('tier2Cap') ?? 0)
 
   await supabase.from('bskl_contracts').insert({
     name,
     capital_injection: capital,
-    daily_rate: rate,
+    daily_rate: t1Rate,
     effective_date: effectiveDate,
-    is_active: true
+    is_active: true,
+    tier1_daily_rate: t1Rate,
+    tier1_cap: t1Cap,
+    tier2_daily_rate: t2Rate,
+    tier2_cap: t2Cap
   })
   revalidatePath('/')
 }
@@ -437,14 +444,21 @@ async function updateBsklContract(formData: FormData) {
   const id = formData.get('id') as string
   const name = formData.get('name') as string
   const capital = Number(formData.get('capital') ?? 0)
-  const rate = Number(formData.get('rate') ?? 0)
   const effectiveDate = formData.get('effectiveDate') as string
+  const t1Rate = Number(formData.get('tier1Rate') ?? 0)
+  const t1Cap = Number(formData.get('tier1Cap') ?? 0)
+  const t2Rate = Number(formData.get('tier2Rate') ?? 0)
+  const t2Cap = Number(formData.get('tier2Cap') ?? 0)
 
   await supabase.from('bskl_contracts').update({
     name,
     capital_injection: capital,
-    daily_rate: rate,
-    effective_date: effectiveDate
+    daily_rate: t1Rate,
+    effective_date: effectiveDate,
+    tier1_daily_rate: t1Rate,
+    tier1_cap: t1Cap,
+    tier2_daily_rate: t2Rate,
+    tier2_cap: t2Cap
   }).eq('id', id)
   revalidatePath('/')
 }
@@ -735,9 +749,38 @@ export default async function Home(props: any = {}) {
     const displayAmount = Math.abs(cNetBalance);
     const displayPct = cCapital > 0 ? (displayAmount / cCapital) * 100 : 0;
     
+    // --- TWO-TIER PROGRESS ENGINE ---
+    const tier1Rate = n(c.tier1_daily_rate) || n(c.daily_rate);
+    const tier1Cap = n(c.tier1_cap);
+    const tier2Rate = n(c.tier2_daily_rate);
+    const tier2Cap = n(c.tier2_cap);
+    const hasTwoTier = tier1Cap > 0 && tier2Cap > 0;
+    
+    // Active tier determination
+    const currentTier = hasTwoTier
+      ? (cTotalRepaid >= tier1Cap ? 2 : 1)
+      : 1;
+    const isTier2Active = currentTier === 2;
+    const activeDailyRate = hasTwoTier
+      ? (isTier2Active ? tier2Rate : tier1Rate)
+      : (tier1Rate || n(c.daily_rate));
+    
+    // Two-tier progress bar widths (proportional to tier2Cap which is the final target Amount Y)
+    const totalTarget = hasTwoTier ? tier2Cap : cCapital;
+    const markerPct = hasTwoTier ? (tier1Cap / tier2Cap) * 100 : 0;
+    const tier1Width = hasTwoTier
+      ? (Math.min(cTotalRepaid, tier1Cap) / tier2Cap) * 100
+      : (Math.min(cTotalRepaid, cCapital) / cCapital) * 100;
+    const tier2Width = hasTwoTier
+      ? (Math.max(0, cTotalRepaid - tier1Cap) / tier2Cap) * 100
+      : 0;
+    
+    // Legacy single-tier progress for backward compat
     const recoveryPct = cCapital > 0 ? (cTotalRepaid / cCapital) * 100 : 0;
     const greenWidth = Math.min(100, recoveryPct);
     const blueWidth = Math.max(0, Math.min(100, recoveryPct - 100));
+    const showSplitBar = hasTwoTier && tier2Cap > 0;
+    const maxedOutTier2 = hasTwoTier && cTotalRepaid >= tier2Cap;
 
     if (c.effective_date.startsWith(currentMonthId)) {
       totalBsklCapitalOutflowThisMonth += cCapital;
@@ -751,7 +794,11 @@ export default async function Home(props: any = {}) {
       totalBsklRemainingCapitalToPay += cNetBalance;
     }
 
-    return { ...c, cTotalRepaid, isProfit, displayAmount, displayPct, cPaidThisMonth, recoveryPct, greenWidth, blueWidth };
+    return { ...c, cTotalRepaid, isProfit, displayAmount, displayPct, cPaidThisMonth,
+      recoveryPct, greenWidth, blueWidth,
+      hasTwoTier, currentTier, isTier2Active, activeDailyRate,
+      tier1Rate, tier1Cap, tier2Rate, tier2Cap, totalTarget,
+      markerPct, tier1Width, tier2Width, showSplitBar, maxedOutTier2 };
   });
 
   // --- BUDGET & POOL CALCULATIONS ---
@@ -933,7 +980,10 @@ export default async function Home(props: any = {}) {
                       <div key={c.id} className={`flex justify-between items-center p-4 rounded-xl border ${isPaid ? 'bg-teal-500/10 border-teal-500/30' : 'bg-[#0b0e14] border-[#383e52]'}`}> 
                         <div>
                           <p className={`font-bold ${isPaid ? 'text-teal-400' : 'text-white'}`}>{c.name}</p>
-                          <p className="text-[10px] text-[#8a93a6] uppercase tracking-widest mt-1">RM {n(c.daily_rate).toFixed(2)}</p>
+                          <p className="text-[10px] text-[#8a93a6] uppercase tracking-widest mt-1">
+                            RM {c.activeDailyRate.toFixed(2)}
+                            {c.showSplitBar && <span className={`ml-1 ${c.isTier2Active ? 'text-purple-400' : 'text-teal-400'}`}>(T{c.currentTier})</span>}
+                          </p>
                         </div>
                         <span className="text-[9px] font-bold text-[#8a93a6] uppercase bg-[#161a23] px-3 py-1.5 border border-[#272b38] rounded-md tracking-widest">
                           {isPaid ? 'Collected' : 'Pending'}
@@ -946,11 +996,14 @@ export default async function Home(props: any = {}) {
                     <form key={c.id} action={toggleBsklPayment} className={`flex justify-between items-center p-4 rounded-xl border ${isPaid ? 'bg-teal-500/10 border-teal-500/30' : 'bg-[#0b0e14] border-[#383e52]'}`}>
                       <input type="hidden" name="contract_id" value={c.id} />
                       <input type="hidden" name="date" value={bsklModalDate} />
-                      <input type="hidden" name="amount" value={c.daily_rate} />
+                      <input type="hidden" name="amount" value={c.activeDailyRate} />
                       <input type="hidden" name="isPaid" value={String(isPaid)} />
                       <div>
                         <p className={`font-bold ${isPaid ? 'text-teal-400' : 'text-white'}`}>{c.name}</p>
-                        <p className="text-[10px] text-[#8a93a6] uppercase tracking-widest mt-1">RM {n(c.daily_rate).toFixed(2)}</p>
+                        <p className="text-[10px] text-[#8a93a6] uppercase tracking-widest mt-1">
+                          RM {c.activeDailyRate.toFixed(2)}
+                          {c.showSplitBar && <span className={`ml-1 ${c.isTier2Active ? 'text-purple-400' : 'text-teal-400'}`}>(T{c.currentTier})</span>}
+                        </p>
                       </div>
                       <button type="submit" className={`text-[10px] uppercase tracking-widest font-black px-4 py-2 rounded-lg transition-colors border ${isPaid ? 'bg-[#161a23] text-[#8a93a6] border-[#383e52] hover:bg-[#272b38]' : 'bg-teal-500/20 text-teal-400 border-teal-500/50 hover:bg-teal-500/30 shadow-[0_0_10px_rgba(20,184,166,0.15)]'}`}>
                         {isPaid ? 'Undo' : 'Collect'}
@@ -1432,7 +1485,9 @@ export default async function Home(props: any = {}) {
                     <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span> BSKL Trade Utility
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6">
-                    {bsklContracts.map((c: any) => (
+                    {bsklContracts.map((c: any) => {
+                      const ec = enrichedContracts.find((e: any) => e.id === c.id) || c
+                      return (
                       <form key={c.id} className="p-4 sm:p-5 bg-[#0b0e14] rounded-xl border border-[#272b38] space-y-4 shadow-sm hover:border-[#383e52] transition-colors flex flex-col justify-between">
                         <input type="hidden" name="id" value={c.id} />
                         <div>
@@ -1450,34 +1505,60 @@ export default async function Home(props: any = {}) {
                           </div>
                           
                           {c.is_active ? (
-                            <div className="grid grid-cols-2 gap-3">
-                              <div>
-                                <label className="text-[9px] text-[#8a93a6] uppercase tracking-widest font-bold">Capital</label>
-                                <input name="capital" type="number" step="0.01" required defaultValue={n(c.capital_injection).toFixed(2)} className="w-full bg-[#161a23] border border-[#272b38] rounded px-2 py-1 text-white text-xs mt-1 outline-none focus:border-blue-500/50" />
+                            <div className="space-y-3">
+                              <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                  <label className="text-[9px] text-[#8a93a6] uppercase tracking-widest font-bold">Capital (RM)</label>
+                                  <input name="capital" type="number" step="0.01" required defaultValue={n(c.capital_injection).toFixed(2)} className="w-full bg-[#161a23] border border-[#272b38] rounded px-2 py-1 text-white text-xs mt-1 outline-none focus:border-blue-500/50" />
+                                </div>
+                                <div>
+                                  <label className="text-[9px] text-[#8a93a6] uppercase tracking-widest font-bold">Eff. Date</label>
+                                  <input name="effectiveDate" type="date" required defaultValue={c.effective_date} className="w-full bg-[#161a23] border border-[#272b38] rounded px-2 py-1 text-white text-xs mt-1 outline-none focus:border-blue-500/50" />
+                                </div>
                               </div>
-                              <div>
-                                <label className="text-[9px] text-[#8a93a6] uppercase tracking-widest font-bold">Eff. Date</label>
-                                <input name="effectiveDate" type="date" required defaultValue={c.effective_date} className="w-full bg-[#161a23] border border-[#272b38] rounded px-2 py-1 text-white text-xs mt-1 outline-none focus:border-blue-500/50" />
+                              <div className="border-t border-[#272b38]/30 pt-2">
+                                <label className="text-[8px] text-teal-400 uppercase tracking-widest font-bold block mb-2">Tier 1 — Initial Engine</label>
+                                <div className="grid grid-cols-2 gap-3">
+                                  <div>
+                                    <label className="text-[8px] text-[#8a93a6] uppercase tracking-widest">Rate / Day (x)</label>
+                                    <input name="tier1Rate" type="number" step="0.01" required defaultValue={n(c.tier1_daily_rate || c.daily_rate).toFixed(2)} className="w-full bg-[#161a23] border border-teal-500/20 rounded px-2 py-1 text-teal-400 font-mono text-xs mt-1 outline-none focus:border-teal-500/50" />
+                                  </div>
+                                  <div>
+                                    <label className="text-[8px] text-[#8a93a6] uppercase tracking-widest">Cap (Amount X)</label>
+                                    <input name="tier1Cap" type="number" step="0.01" required defaultValue={n(c.tier1_cap).toFixed(2)} className="w-full bg-[#161a23] border border-teal-500/20 rounded px-2 py-1 text-teal-300 font-mono text-xs mt-1 outline-none focus:border-teal-500/50" />
+                                  </div>
+                                </div>
                               </div>
-                              <div>
-                                <label className="text-[9px] text-[#8a93a6] uppercase tracking-widest font-bold">Rate / Day</label>
-                                <input name="rate" type="number" step="0.01" required defaultValue={n(c.daily_rate).toFixed(2)} className="w-full bg-[#161a23] border border-[#272b38] rounded px-2 py-1 text-teal-400 font-mono text-xs mt-1 outline-none focus:border-blue-500/50" />
+                              <div className="border-t border-[#272b38]/30 pt-2">
+                                <label className="text-[8px] text-purple-400 uppercase tracking-widest font-bold block mb-2">Tier 2 — Booster Engine</label>
+                                <div className="grid grid-cols-2 gap-3">
+                                  <div>
+                                    <label className="text-[8px] text-[#8a93a6] uppercase tracking-widest">Rate / Day (y)</label>
+                                    <input name="tier2Rate" type="number" step="0.01" required defaultValue={n(c.tier2_daily_rate).toFixed(2)} className="w-full bg-[#161a23] border border-purple-500/20 rounded px-2 py-1 text-purple-400 font-mono text-xs mt-1 outline-none focus:border-purple-500/50" />
+                                  </div>
+                                  <div>
+                                    <label className="text-[8px] text-[#8a93a6] uppercase tracking-widest">Final Cap (Amount Y)</label>
+                                    <input name="tier2Cap" type="number" step="0.01" required defaultValue={n(c.tier2_cap).toFixed(2)} className="w-full bg-[#161a23] border border-purple-500/20 rounded px-2 py-1 text-purple-300 font-mono text-xs mt-1 outline-none focus:border-purple-500/50" />
+                                  </div>
+                                </div>
                               </div>
                             </div>
                           ) : (
-                            <div className="grid grid-cols-2 gap-3">
-                              <div>
-                                <p className="text-[9px] text-[#8a93a6] uppercase tracking-widest font-bold">Capital</p>
-                                <p className="text-xs text-white mt-1 font-mono">{n(c.capital_injection).toFixed(2)}</p>
+                            <div className="space-y-2">
+                              <div className="grid grid-cols-2 gap-3">
+                                <div><p className="text-[9px] text-[#8a93a6] uppercase tracking-widest font-bold">Capital</p><p className="text-xs text-white mt-1 font-mono">{n(c.capital_injection).toFixed(2)}</p></div>
+                                <div><p className="text-[9px] text-[#8a93a6] uppercase tracking-widest font-bold">Eff. Date</p><p className="text-xs text-white mt-1 font-mono">{c.effective_date}</p></div>
                               </div>
-                              <div>
-                                <p className="text-[9px] text-[#8a93a6] uppercase tracking-widest font-bold">Eff. Date</p>
-                                <p className="text-xs text-white mt-1 font-mono">{c.effective_date}</p>
+                              <div className="grid grid-cols-2 gap-3">
+                                <div><p className="text-[8px] text-teal-400 uppercase tracking-widest font-bold">Tier 1 Rate</p><p className="text-xs text-teal-400 mt-1 font-mono">{n(c.tier1_daily_rate || c.daily_rate).toFixed(2)}</p></div>
+                                <div><p className="text-[8px] text-[#8a93a6] uppercase tracking-widest font-bold">Tier 1 Cap</p><p className="text-xs text-white mt-1 font-mono">{n(c.tier1_cap) > 0 ? n(c.tier1_cap).toFixed(2) : '—'}</p></div>
                               </div>
-                              <div>
-                                <p className="text-[9px] text-[#8a93a6] uppercase tracking-widest font-bold">Rate / Day</p>
-                                <p className="text-xs text-teal-400 mt-1 font-mono">{n(c.daily_rate).toFixed(2)}</p>
-                              </div>
+                              {n(c.tier2_cap) > 0 && (
+                                <div className="grid grid-cols-2 gap-3">
+                                  <div><p className="text-[8px] text-purple-400 uppercase tracking-widest font-bold">Tier 2 Rate</p><p className="text-xs text-purple-400 mt-1 font-mono">{n(c.tier2_daily_rate).toFixed(2)}</p></div>
+                                  <div><p className="text-[8px] text-[#8a93a6] uppercase tracking-widest font-bold">Final Cap</p><p className="text-xs text-white mt-1 font-mono">{n(c.tier2_cap).toFixed(2)}</p></div>
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>
@@ -1489,7 +1570,7 @@ export default async function Home(props: any = {}) {
                           </div>
                         )}
                       </form>
-                    ))}
+                    )})}
 
                     <form action={addBsklContract} className="p-4 sm:p-5 bg-[#161a23] rounded-xl border border-dashed border-[#383e52] space-y-4 shadow-sm hover:border-blue-500/50 transition-colors flex flex-col justify-center">
                       <p className="font-bold text-blue-400 text-sm border-b border-blue-500/20 pb-1">+ New Injection</p>
@@ -1499,17 +1580,39 @@ export default async function Home(props: any = {}) {
                            <input name="name" type="text" required className="w-full bg-[#0b0e14] border border-[#272b38] rounded-lg px-2.5 py-2 text-white text-xs outline-none focus:border-blue-500/50 transition-colors" placeholder="e.g. Batch 2" />
                         </div>
                         <div className="grid grid-cols-2 gap-3 sm:gap-4">
-                          <div className="col-span-2">
+                          <div>
                             <label className="text-[9px] text-[#8a93a6] block mb-1.5 uppercase tracking-widest font-bold">Capital (RM)</label>
                             <input name="capital" type="number" step="0.01" required className="w-full bg-[#0b0e14] border border-[#272b38] rounded-lg px-2.5 py-2 text-white text-xs outline-none focus:border-blue-500/50 transition-colors" />
                           </div>
                           <div>
-                            <label className="text-[9px] text-[#8a93a6] block mb-1.5 uppercase tracking-widest font-bold">Rate / Day</label>
-                            <input name="rate" type="number" step="0.01" required className="w-full bg-[#0b0e14] border border-[#272b38] rounded-lg px-2.5 py-2 text-white text-xs outline-none focus:border-blue-500/50 transition-colors" />
-                          </div>
-                          <div>
                             <label className="text-[9px] text-[#8a93a6] block mb-1.5 uppercase tracking-widest font-bold">Eff. Date</label>
                             <input name="effectiveDate" type="date" required className="w-full bg-[#0b0e14] border border-[#272b38] rounded-lg px-2.5 py-2 text-white text-xs outline-none focus:border-blue-500/50 transition-colors" />
+                          </div>
+                        </div>
+                        <div className="border-t border-[#272b38]/30 pt-3">
+                          <label className="text-[9px] text-teal-400 uppercase tracking-widest font-bold block mb-2">Tier 1 — Initial Engine</label>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="text-[8px] text-[#8a93a6] uppercase tracking-widest">Rate / Day (x)</label>
+                              <input name="tier1Rate" type="number" step="0.01" required className="w-full bg-[#0b0e14] border border-teal-500/20 rounded-lg px-2.5 py-2 text-teal-400 font-mono text-xs outline-none focus:border-teal-500/50 transition-colors" />
+                            </div>
+                            <div>
+                              <label className="text-[8px] text-[#8a93a6] uppercase tracking-widest">Cap (Amount X)</label>
+                              <input name="tier1Cap" type="number" step="0.01" required className="w-full bg-[#0b0e14] border border-teal-500/20 rounded-lg px-2.5 py-2 text-teal-300 font-mono text-xs outline-none focus:border-teal-500/50 transition-colors" />
+                            </div>
+                          </div>
+                        </div>
+                        <div className="border-t border-[#272b38]/30 pt-3">
+                          <label className="text-[9px] text-purple-400 uppercase tracking-widest font-bold block mb-2">Tier 2 — Booster Engine</label>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="text-[8px] text-[#8a93a6] uppercase tracking-widest">Rate / Day (y)</label>
+                              <input name="tier2Rate" type="number" step="0.01" required className="w-full bg-[#0b0e14] border border-purple-500/20 rounded-lg px-2.5 py-2 text-purple-400 font-mono text-xs outline-none focus:border-purple-500/50 transition-colors" />
+                            </div>
+                            <div>
+                              <label className="text-[8px] text-[#8a93a6] uppercase tracking-widest">Final Cap (Amount Y)</label>
+                              <input name="tier2Cap" type="number" step="0.01" required className="w-full bg-[#0b0e14] border border-purple-500/20 rounded-lg px-2.5 py-2 text-purple-300 font-mono text-xs outline-none focus:border-purple-500/50 transition-colors" />
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -1877,8 +1980,22 @@ export default async function Home(props: any = {}) {
                             <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
                               <h3 className="text-base sm:text-lg font-bold text-white leading-tight">{c.name}</h3>
                               {!c.is_active && <span className="text-[8px] bg-[#0b0e14] text-[#8a93a6] px-1.5 py-0.5 rounded border border-[#383e52] uppercase tracking-widest">ENDED</span>}
+                              {c.is_active && c.showSplitBar && (
+                                <span className={`text-[8px] font-bold px-2 py-0.5 rounded uppercase tracking-widest border ${c.isTier2Active ? 'bg-purple-500/10 text-purple-400 border-purple-500/30' : 'bg-teal-500/10 text-teal-400 border-teal-500/30'}`}>
+                                  {c.isTier2Active ? 'Tier 2 Active' : 'Tier 1 Active'}
+                                </span>
+                              )}
                             </div>
-                            <p className="text-[10px] text-[#8a93a6] mt-1 tracking-widest uppercase">RM {n(c.daily_rate).toFixed(2)} / Trading Day</p>
+                            <div className="flex items-center gap-2 mt-1">
+                              <p className="text-[10px] text-[#8a93a6] tracking-widest uppercase">
+                                RM {c.activeDailyRate.toFixed(2)} / Trading Day
+                              </p>
+                              {c.showSplitBar && (
+                                <span className="text-[8px] text-[#8a93a6] tracking-widest">
+                                  {c.isTier2Active ? `(Tier 2: RM ${c.tier2Rate.toFixed(2)})` : `(Tier 1: RM ${c.tier1Rate.toFixed(2)})`}
+                                </span>
+                              )}
+                            </div>
                           </div>
                           <div className="text-right">
                             <p className={`text-[9px] font-bold uppercase tracking-widest ${c.isProfit ? 'text-teal-500' : 'text-[#8a93a6]'}`}>
@@ -1890,21 +2007,37 @@ export default async function Home(props: any = {}) {
                           </div>
                         </div>
                         
-                        {/* Minimalist Border Progress Bar */}
-                        <div className="w-full h-px bg-[#272b38] relative mt-1">
-                          {/* Green Base Bar (Capital Recovery up to 100%) */}
-                          <div 
-                            className="absolute top-0 left-0 h-full bg-teal-500/60 shadow-[0_0_8px_rgba(45,212,191,0.4)] transition-all duration-1000 ease-out" 
-                            style={{ width: `${c.greenWidth}%` }}
-                          />
-                          {/* Blue Overlay Bar (Profit > 100%) */}
-                          {c.blueWidth > 0 && (
+                        {/* Two-Tier Stacked Progress Bar */}
+                        {c.showSplitBar ? (
+                          <div className="w-full mt-1 space-y-1">
+                            <div className="relative w-full h-5 bg-[#0b0e14] rounded-full border border-[#272b38] overflow-visible">
+                              <div style={{ width: `${c.tier1Width}%` }} className="absolute top-0 left-0 h-full bg-gradient-to-r from-teal-600 to-teal-400 rounded-l-full transition-all duration-700 ease-out" />
+                              <div style={{ width: `${c.tier2Width}%`, left: `${c.markerPct}%` }} className={`absolute top-0 h-full bg-gradient-to-r from-purple-600 to-purple-400 transition-all duration-700 ease-out ${c.maxedOutTier2 ? 'rounded-r-full' : ''}`} />
+                              <div style={{ left: `${c.markerPct}%` }} className="absolute top-[-3px] w-[2px] h-[28px] bg-slate-400 shadow-[0_0_6px_rgba(255,255,255,0.3)] z-10 pointer-events-none">
+                                <span className="absolute bottom-[-16px] left-1/2 transform -translate-x-1/2 text-[8px] font-mono text-[#8a93a6] whitespace-nowrap font-bold">
+                                  X (RM {c.tier1Cap.toFixed(0)})
+                                </span>
+                              </div>
+                            </div>
+                            <div className="flex justify-between items-center text-[9px] font-mono text-[#8a93a6] px-1">
+                              <span>RM 0</span>
+                              <span className="text-purple-400 font-bold">Y: RM {c.tier2Cap.toFixed(2)}</span>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="w-full h-px bg-[#272b38] relative mt-1">
                             <div 
-                              className="absolute top-0 left-0 h-full bg-blue-500/80 shadow-[0_0_8px_rgba(59,130,246,0.6)] transition-all duration-1000 ease-out z-10" 
-                              style={{ width: `${c.blueWidth}%` }}
+                              className="absolute top-0 left-0 h-full bg-teal-500/60 shadow-[0_0_8px_rgba(45,212,191,0.4)] transition-all duration-1000 ease-out" 
+                              style={{ width: `${c.greenWidth}%` }}
                             />
-                          )}
-                        </div>
+                            {c.blueWidth > 0 && (
+                              <div 
+                                className="absolute top-0 left-0 h-full bg-blue-500/80 shadow-[0_0_8px_rgba(59,130,246,0.6)] transition-all duration-1000 ease-out z-10" 
+                                style={{ width: `${c.blueWidth}%` }}
+                              />
+                            )}
+                          </div>
+                        )}
                       </div>
                     ))
                   )}
@@ -1941,33 +2074,33 @@ export default async function Home(props: any = {}) {
                            const c = dayContracts[0];
                            const isPaid = bsklPayments.some((p: any) => p.contract_id === c.id && p.paid_date === dateStr);
                            if ((isReadOnly || isMonthClosed)) {
-                             return (
-                               <div key={day} className={`aspect-square rounded flex flex-col items-center justify-center border p-0.5 sm:p-1 gap-0.5 ${isPaid ? 'bg-teal-500/10 border-teal-500/30' : 'bg-[#161a23] border-[#383e52]'}`}>
-                                 <span className={`text-[8px] sm:text-[9px] font-normal leading-none ${isPaid ? 'text-teal-400/60' : 'text-[#8a93a6]/60'}`}>{day}</span>
-                                 <span className={`text-[8px] sm:text-[11px] font-bold leading-none ${isPaid ? 'text-teal-400' : 'text-[#8a93a6]'}`}>{c.daily_rate}</span>
-                               </div>
-                             );
-                           }
-                           return (
-                             <form key={day} action={toggleBsklPayment} className="aspect-square">
-                               <input type="hidden" name="contract_id" value={c.id} />
-                               <input type="hidden" name="date" value={dateStr} />
-                               <input type="hidden" name="amount" value={c.daily_rate} />
-                               <input type="hidden" name="isPaid" value={String(isPaid)} />
-                               <button type="submit" className={`w-full h-full rounded flex flex-col items-center justify-center transition-all border p-0.5 sm:p-1 gap-0.5 ${isPaid ? 'bg-teal-500/10 border-teal-500/30 hover:bg-teal-500/20' : 'bg-[#161a23] border-[#383e52] hover:border-amber-500/40'}`}>
-                                 <span className={`text-[8px] sm:text-[9px] font-normal leading-none ${isPaid ? 'text-teal-400/60' : 'text-[#8a93a6]/60'}`}>{day}</span>
-                                 <span className={`text-[8px] sm:text-[11px] font-bold leading-none ${isPaid ? 'text-teal-400' : 'text-[#8a93a6]'}`}>{c.daily_rate}</span>
-                               </button>
-                             </form>
-                           );
+                              return (
+                                <div key={day} className={`aspect-square rounded flex flex-col items-center justify-center border p-0.5 sm:p-1 gap-0.5 ${isPaid ? 'bg-teal-500/10 border-teal-500/30' : 'bg-[#161a23] border-[#383e52]'}`}>
+                                  <span className={`text-[8px] sm:text-[9px] font-normal leading-none ${isPaid ? 'text-teal-400/60' : 'text-[#8a93a6]/60'}`}>{day}</span>
+                                  <span className={`text-[8px] sm:text-[11px] font-bold leading-none ${isPaid ? 'text-teal-400' : 'text-[#8a93a6]'}`}>{c.activeDailyRate.toFixed(2)}</span>
+                                </div>
+                              );
+                            }
+                            return (
+                              <form key={day} action={toggleBsklPayment} className="aspect-square">
+                                <input type="hidden" name="contract_id" value={c.id} />
+                                <input type="hidden" name="date" value={dateStr} />
+                                <input type="hidden" name="amount" value={c.activeDailyRate} />
+                                <input type="hidden" name="isPaid" value={String(isPaid)} />
+                                <button type="submit" className={`w-full h-full rounded flex flex-col items-center justify-center transition-all border p-0.5 sm:p-1 gap-0.5 ${isPaid ? 'bg-teal-500/10 border-teal-500/30 hover:bg-teal-500/20' : 'bg-[#161a23] border-[#383e52] hover:border-amber-500/40'}`}>
+                                  <span className={`text-[8px] sm:text-[9px] font-normal leading-none ${isPaid ? 'text-teal-400/60' : 'text-[#8a93a6]/60'}`}>{day}</span>
+                                  <span className={`text-[8px] sm:text-[11px] font-bold leading-none ${isPaid ? 'text-teal-400' : 'text-[#8a93a6]'}`}>{c.activeDailyRate.toFixed(2)}</span>
+                                </button>
+                              </form>
+                            );
                         }
                         return (
                           <a key={day} href={`?month=${currentSelectedMonth}&bsklModal=${dateStr}${isEditing ? '&edit=true' : ''}`} className="aspect-square rounded flex flex-col items-center justify-center transition-all border bg-[#161a23] border-[#383e52] hover:border-amber-500/40 p-0.5 sm:p-1 gap-0.5">
                              <span className="text-[8px] sm:text-[9px] font-normal text-[#8a93a6]/60 leading-none">{day}</span>
-                             {dayContracts.map((c: any) => {
-                                const isPaid = bsklPayments.some((p: any) => p.contract_id === c.id && p.paid_date === dateStr);
-                                return <span key={c.id} className={`text-[8px] md:text-[9px] font-bold leading-none ${isPaid ? 'text-teal-400' : 'text-[#8a93a6]'}`}>{c.daily_rate}</span>
-                             })}
+                              {dayContracts.map((c: any) => {
+                                 const isPaid = bsklPayments.some((p: any) => p.contract_id === c.id && p.paid_date === dateStr);
+                                 return <span key={c.id} className={`text-[8px] md:text-[9px] font-bold leading-none ${isPaid ? 'text-teal-400' : 'text-[#8a93a6]'}`}>{c.activeDailyRate.toFixed(2)}</span>
+                              })}
                           </a>
                         )
                       })}
