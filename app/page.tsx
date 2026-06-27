@@ -2427,28 +2427,21 @@ export default async function Home(props: any = {}) {
                               )}
                             </div>
                           ) : (
-                            !isReadOnly && !isMonthClosed && (
-                              showMonthEndButtons ? (
-                                <div className="flex items-center gap-3">
-                                  <form action={carryForwardBudget}>
-                                    <input type="hidden" name="id" value={budget.id} />
-                                    <input type="hidden" name="category" value={budget.category} />
-                                    <input type="hidden" name="remaining" value={remaining} />
-                                    <input type="hidden" name="allocated" value={allocated} />
-                                    <input type="hidden" name="nextMonth" value={`${nextMonthDate.getFullYear()}-${String(nextMonthDate.getMonth() + 1).padStart(2, '0')}-01`} />
-                                    <button type="submit" disabled={remaining <= 0} className="text-[10px] uppercase tracking-widest font-bold px-4 py-2 sm:px-5 sm:py-2.5 rounded-full border border-blue-500/30 text-blue-400 bg-transparent hover:bg-blue-500/10 transition-all disabled:opacity-30">Carry Forward</button>
-                                  </form>
-                                  <form action={sendToSavings}>
-                                    <input type="hidden" name="id" value={budget.id} />
-                                    <button type="submit" disabled={remaining <= 0} className="text-[10px] uppercase tracking-widest font-bold px-4 py-2 sm:px-5 sm:py-2.5 rounded-full border border-teal-500/40 text-teal-400 bg-teal-500/10 hover:bg-teal-500/20 transition-all disabled:opacity-30 disabled:hover:bg-teal-500/10">Close & Send to Pool</button>
-                                  </form>
-                                </div>
-                              ) : (
+                            !isReadOnly && !isMonthClosed && showMonthEndButtons && (
+                              <div className="flex items-center gap-3">
+                                <form action={carryForwardBudget}>
+                                  <input type="hidden" name="id" value={budget.id} />
+                                  <input type="hidden" name="category" value={budget.category} />
+                                  <input type="hidden" name="remaining" value={remaining} />
+                                  <input type="hidden" name="allocated" value={allocated} />
+                                  <input type="hidden" name="nextMonth" value={`${nextMonthDate.getFullYear()}-${String(nextMonthDate.getMonth() + 1).padStart(2, '0')}-01`} />
+                                  <button type="submit" disabled={remaining <= 0} className="text-[10px] uppercase tracking-widest font-bold px-4 py-2 sm:px-5 sm:py-2.5 rounded-full border border-blue-500/30 text-blue-400 bg-transparent hover:bg-blue-500/10 transition-all disabled:opacity-30">Carry Forward</button>
+                                </form>
                                 <form action={sendToSavings}>
                                   <input type="hidden" name="id" value={budget.id} />
                                   <button type="submit" disabled={remaining <= 0} className="text-[10px] uppercase tracking-widest font-bold px-4 py-2 sm:px-5 sm:py-2.5 rounded-full border border-teal-500/40 text-teal-400 bg-teal-500/10 hover:bg-teal-500/20 transition-all disabled:opacity-30 disabled:hover:bg-teal-500/10">Close & Send to Pool</button>
                                 </form>
-                              )
+                              </div>
                             )
                           )}
                         </div>
