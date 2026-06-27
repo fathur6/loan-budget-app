@@ -973,10 +973,9 @@ export default async function Home(props: any = {}) {
   const isLast7Days = realDay >= (realLastDay - 6)
   const shouldShowCloseMonth = !isReadOnly && !isMonthClosed && currentSalary > 0 && isViewingCurrentMonth && isLast7Days
 
-  // Show carry-forward option only in the last 10 days of the viewed month
-  const viewedLastDay = new Date(year, monthIndex + 1, 0).getDate()
-  const viewedDay = (year === realYear && monthIndex === realMonth) ? realDay : 1
-  const isLast10Days = (viewedLastDay - viewedDay) < 10
+  // Budget card action buttons (Send to Pool / Carry Forward) 
+  // only visible in last 7 days of current real month when viewing that month
+  const showMonthEndButtons = !isReadOnly && !isMonthClosed && isViewingCurrentMonth && isLast7Days
 
   // --- CENTRALIZED TRANSACTION LOG ENGINE ---
   let systemLogs: any[] = [];
@@ -2429,7 +2428,7 @@ export default async function Home(props: any = {}) {
                             </div>
                           ) : (
                             !isReadOnly && !isMonthClosed && (
-                              isLast10Days ? (
+                              showMonthEndButtons ? (
                                 <div className="flex items-center gap-3">
                                   <form action={carryForwardBudget}>
                                     <input type="hidden" name="id" value={budget.id} />
@@ -2441,13 +2440,13 @@ export default async function Home(props: any = {}) {
                                   </form>
                                   <form action={sendToSavings}>
                                     <input type="hidden" name="id" value={budget.id} />
-                                    <button type="submit" disabled={remaining <= 0} className="text-[10px] uppercase tracking-widest font-bold px-4 py-2 sm:px-5 sm:py-2.5 rounded-full border border-teal-500/40 text-teal-400 bg-teal-500/10 hover:bg-teal-500/20 transition-all disabled:opacity-30 disabled:hover:bg-teal-500/10">Approve & Send to Pool</button>
+                                    <button type="submit" disabled={remaining <= 0} className="text-[10px] uppercase tracking-widest font-bold px-4 py-2 sm:px-5 sm:py-2.5 rounded-full border border-teal-500/40 text-teal-400 bg-teal-500/10 hover:bg-teal-500/20 transition-all disabled:opacity-30 disabled:hover:bg-teal-500/10">Close & Send to Pool</button>
                                   </form>
                                 </div>
                               ) : (
                                 <form action={sendToSavings}>
                                   <input type="hidden" name="id" value={budget.id} />
-                                  <button type="submit" disabled={remaining <= 0} className="text-[10px] uppercase tracking-widest font-bold px-4 py-2 sm:px-5 sm:py-2.5 rounded-full border border-teal-500/40 text-teal-400 bg-teal-500/10 hover:bg-teal-500/20 transition-all disabled:opacity-30 disabled:hover:bg-teal-500/10">Approve & Send to Pool</button>
+                                  <button type="submit" disabled={remaining <= 0} className="text-[10px] uppercase tracking-widest font-bold px-4 py-2 sm:px-5 sm:py-2.5 rounded-full border border-teal-500/40 text-teal-400 bg-teal-500/10 hover:bg-teal-500/20 transition-all disabled:opacity-30 disabled:hover:bg-teal-500/10">Close & Send to Pool</button>
                                 </form>
                               )
                             )
