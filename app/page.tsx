@@ -960,15 +960,23 @@ export default async function Home(props: any = {}) {
   // Trade returns excluded — they flow directly to pool via totalBsklRepaidAllTime
   const totalOutflowsThisMonth = totalBudgetsAllocatedThisMonth + paidLoansStatementTotal + totalBsklCapitalOutflowThisMonth
   const rolloverSurplus = Math.max(0, totalInflowsThisMonth - totalOutflowsThisMonth)
-  const shouldShowCloseMonth = !isReadOnly && !isMonthClosed && currentSalary > 0
   const rolledOverThisMonth = currentMonthStatus?.rollover_amount ? n(currentMonthStatus.rollover_amount) : 0
 
-  // Show carry-forward option only in the last 10 days of the current month
-  const todayDate = new Date()
-  const lastDayOfCurrentMonth = new Date(year, monthIndex + 1, 0).getDate()
-  const isLast10Days = (lastDayOfCurrentMonth - todayDate.getDate()) < 10
-    && todayDate.getFullYear() === year
-    && todayDate.getMonth() === monthIndex
+  // Show rollover banner only in last 7 days of current real-world month,
+  // AND only when viewing that same month on the dashboard
+  const realToday = new Date()
+  const realYear = realToday.getFullYear()
+  const realMonth = realToday.getMonth()
+  const realDay = realToday.getDate()
+  const realLastDay = new Date(realYear, realMonth + 1, 0).getDate()
+  const isViewingCurrentMonth = (year === realYear) && (monthIndex === realMonth)
+  const isLast7Days = realDay >= (realLastDay - 6)
+  const shouldShowCloseMonth = !isReadOnly && !isMonthClosed && currentSalary > 0 && isViewingCurrentMonth && isLast7Days
+
+  // Show carry-forward option only in the last 10 days of the viewed month
+  const viewedLastDay = new Date(year, monthIndex + 1, 0).getDate()
+  const viewedDay = (year === realYear && monthIndex === realMonth) ? realDay : 1
+  const isLast10Days = (viewedLastDay - viewedDay) < 10
 
   // --- CENTRALIZED TRANSACTION LOG ENGINE ---
   let systemLogs: any[] = [];
