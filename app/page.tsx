@@ -956,7 +956,8 @@ export default async function Home(props: any = {}) {
 
   // --- ROLLOVER ENGINE: Calculate surplus available for debt snowball / pool sweep ---
   // Surplus = cash inflows - outflows for the month (ignoring already-saved budgets)
-  const totalInflowsThisMonth = currentSalary + poolTransfersInThisMonth + totalBsklRepaymentsInflowThisMonth
+  const totalInflowsThisMonth = currentSalary + poolTransfersInThisMonth
+  // Trade returns excluded — they flow directly to pool via totalBsklRepaidAllTime
   const totalOutflowsThisMonth = totalBudgetsAllocatedThisMonth + paidLoansStatementTotal + totalBsklCapitalOutflowThisMonth
   const rolloverSurplus = Math.max(0, totalInflowsThisMonth - totalOutflowsThisMonth)
   const shouldShowCloseMonth = !isReadOnly && !isMonthClosed && currentSalary > 0
