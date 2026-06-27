@@ -543,7 +543,7 @@ async function updateSalary(formData: FormData) {
   revalidatePath('/')
 }
 
-// --- Month Rollover / Close Month ---
+// --- Month Rollover / Close Month (Atomic via RPC) ---
 async function closeMonth(formData: FormData) {
   'use server'
   const supabasePath = "./supabase"
@@ -555,27 +555,29 @@ async function closeMonth(formData: FormData) {
   const nextMonthStr = formData.get('nextMonth') as string
   const rolloverAmount = Number(formData.get('rolloverAmount') ?? 0)
 
-  // 1. Sweep all unsaved budget surpluses into the liquidity pool
-  const { data: monthBudgets } = await supabase.from('budgets')
-    .select('id, allocated_amount, spent_amount, is_saved')
-    .eq('budget_month', monthId + '-01')
-
-  if (monthBudgets) {
-    for (const b of monthBudgets) {
-      if (!b.is_saved) {
-        await supabase.from('budgets').update({ is_saved: true }).eq('id', b.id)
-      }
-    }
-  }
-
-  await supabase.from('month_status').upsert({
-    month_id: monthId,
-    is_closed: true,
-    rollover_amount: rolloverAmount,
-    closed_at: new Date().toISOString()
+  // Call the atomic database function that checks lock, sweeps budgets,
+  // records rollover, and marks month as closed in a single transaction
+  const { data, error } = await supabase.rpc('finalize_month_and_sweep', {
+    p_month_id: monthId,
+    p_rollover_amount: rolloverAmount
   })
 
-  // 3. Redirect to next month
+  if (error) {
+    console.error('RPC finalize_month_and_sweep failed:', error)
+    revalidatePath('/')
+    return
+  }
+
+  if (!data?.success) {
+    // Month was already finalized — silently redirect to next month
+    const { redirect } = await import('next/navigation')
+    redirect(`/?month=${nextMonthStr}`)
+    return
+  }
+
+  revalidatePath('/')
+
+  // Redirect to next month
   const { redirect } = await import('next/navigation')
   redirect(`/?month=${nextMonthStr}`)
 }
