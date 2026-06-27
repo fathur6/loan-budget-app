@@ -591,11 +591,12 @@ async function closeMonth(formData: FormData) {
   const supabasePath = "./supabase"
   const cachePath = "next/cache"
   const { supabase } = await import(supabasePath)
-  const { revalidatePath } = await import(cachePath)
+  const { redirect } = await import('next/navigation')
 
   const monthId = formData.get('monthId') as string
   const nextMonthStr = formData.get('nextMonth') as string
   const rolloverAmount = Number(formData.get('rolloverAmount') ?? 0)
+  const currentMonthFull = formData.get('currentMonthFull') as string
 
   // Call the atomic database function that checks lock, sweeps budgets,
   // records rollover, and marks month as closed in a single transaction
@@ -605,23 +606,17 @@ async function closeMonth(formData: FormData) {
   })
 
   if (error) {
-    console.error('RPC finalize_month_and_sweep failed:', error)
-    revalidatePath('/')
-    return
+    // Redirect back so user sees error banner
+    redirect(`/?month=${currentMonthFull}&rolled=error&msg=${encodeURIComponent(error.message)}`)
   }
 
   if (!data?.success) {
-    // Month was already finalized — silently redirect to next month
-    const { redirect } = await import('next/navigation')
-    redirect(`/?month=${nextMonthStr}`)
-    return
+    // Month was already finalized
+    redirect(`/?month=${nextMonthStr}&rolled=locked&msg=${encodeURIComponent('Bulan ini telah pun dimuktamadkan.')}`)
   }
 
-  revalidatePath('/')
-
-  // Redirect to next month
-  const { redirect } = await import('next/navigation')
-  redirect(`/?month=${nextMonthStr}`)
+  // Success — advance to next month
+  redirect(`/?month=${nextMonthStr}&rolled=success&amt=${rolloverAmount.toFixed(2)}`)
 }
 
 // ---------- MAIN PAGE COMPONENT ----------
@@ -643,6 +638,9 @@ export default async function Home(props: any = {}) {
   const bsklModalDate = sp.bsklModal 
   const isLogOpen = sp.log === 'true'
   const editLogId = sp.editLog
+  const rolledStatus = sp.rolled
+  const rolledMsg = sp.msg
+  const rolledAmt = sp.amt
   const n = (v: any) => Number(v ?? 0)
 
   let isReadOnly = false;
@@ -1258,6 +1256,22 @@ export default async function Home(props: any = {}) {
             </a>
           </div>
 
+          {/* --- ROLLOVER FEEDBACK BANNER --- */}
+          {rolledStatus && (
+            <div className={`max-w-2xl mx-auto mb-4 sm:mb-8 rounded-2xl p-5 sm:p-6 border ${rolledStatus === 'success' ? 'bg-emerald-500/5 border-emerald-500/20' : rolledStatus === 'locked' ? 'bg-amber-500/5 border-amber-500/20' : 'bg-rose-500/5 border-rose-500/20'}`}>
+              <div className="flex items-start gap-3">
+                <span className="text-xl">{rolledStatus === 'success' ? '✅' : rolledStatus === 'locked' ? '⚠️' : '❌'}</span>
+                <div className="flex-1">
+                  <p className={`text-xs sm:text-sm font-bold uppercase tracking-widest ${rolledStatus === 'success' ? 'text-emerald-400' : rolledStatus === 'locked' ? 'text-amber-400' : 'text-rose-400'}`}>
+                    {rolledStatus === 'success' ? `Rollover Berjaya! +RM ${rolledAmt || '0.00'} swept to Liquidity Pool.` : rolledStatus === 'locked' ? 'Month Already Finalized' : 'System Error'}
+                  </p>
+                  {rolledMsg && <p className="text-[10px] text-[#8a93a6] mt-1">{decodeURIComponent(rolledMsg)}</p>}
+                </div>
+                <a href={`?month=${currentSelectedMonth}`} className="text-[#8a93a6] hover:text-white text-lg leading-none flex-shrink-0">&times;</a>
+              </div>
+            </div>
+          )}
+
           {/* --- ROLLOVER / CLOSE MONTH BANNER --- */}
           {isMonthClosed ? (
             <div className="max-w-2xl mx-auto mb-4 sm:mb-8 bg-emerald-500/5 border border-emerald-500/20 rounded-2xl p-5 sm:p-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -1283,6 +1297,7 @@ export default async function Home(props: any = {}) {
                 <input type="hidden" name="monthId" value={currentMonthId} />
                 <input type="hidden" name="nextMonth" value={nextMonthStr} />
                 <input type="hidden" name="rolloverAmount" value={rolloverSurplus.toFixed(2)} />
+                <input type="hidden" name="currentMonthFull" value={currentSelectedMonth} />
                 
                 <div>
                   <p className="text-[10px] sm:text-[11px] text-amber-400 font-semibold uppercase tracking-[0.15em] flex items-center gap-2">
