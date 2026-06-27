@@ -639,6 +639,8 @@ export default async function Home(props: any = {}) {
 
   const currentSelectedMonth = sp.month || '2026-06-01'
   const currentMonthId = currentSelectedMonth.substring(0, 7)
+  const bsklSelectedMonth = sp.bsklMonth || currentSelectedMonth
+  const bsklMonthId = bsklSelectedMonth.substring(0, 7)
   const expandedDebtId = sp.details
   const bsklModalDate = sp.bsklModal 
   const isLogOpen = sp.log === 'true'
@@ -746,6 +748,19 @@ export default async function Home(props: any = {}) {
   const nextMonthDate = new Date(year, monthIndex + 1, 1);
   const nextMonthStr = `${nextMonthDate.getFullYear()}-${String(nextMonthDate.getMonth() + 1).padStart(2, '0')}-01`;
   const nextMonthLabel = nextMonthDate.toLocaleDateString('en-MY', { month: 'short', year: 'numeric' }).toUpperCase();
+
+  // Independent BSKL calendar month navigation (decoupled from main dashboard month)
+  const bsklYear = parseInt(bsklSelectedMonth.split('-')[0]);
+  const bsklMonthIndex = parseInt(bsklSelectedMonth.split('-')[1]) - 1;
+  const bsklDaysInMonth = new Date(bsklYear, bsklMonthIndex + 1, 0).getDate();
+  const bsklFirstDayOfWeek = new Date(bsklYear, bsklMonthIndex, 1).getDay();
+  const bsklPrevMonthDate = new Date(bsklYear, bsklMonthIndex - 1, 1);
+  const bsklPrevMonthStr = `${bsklPrevMonthDate.getFullYear()}-${String(bsklPrevMonthDate.getMonth() + 1).padStart(2, '0')}-01`;
+  const bsklPrevMonthLabel = bsklPrevMonthDate.toLocaleDateString('en-MY', { month: 'short', year: 'numeric' }).toUpperCase();
+  const bsklNextMonthDate = new Date(bsklYear, bsklMonthIndex + 1, 1);
+  const bsklNextMonthStr = `${bsklNextMonthDate.getFullYear()}-${String(bsklNextMonthDate.getMonth() + 1).padStart(2, '0')}-01`;
+  const bsklNextMonthLabel = bsklNextMonthDate.toLocaleDateString('en-MY', { month: 'short', year: 'numeric' }).toUpperCase();
+  const bsklFormattedMonthDisplay = new Date(bsklSelectedMonth + 'T00:00:00').toLocaleDateString('en-MY', { month: 'long', year: 'numeric' }).toUpperCase();
 
   const historyMonths: { label: string; monthId: string; yearStr: string }[] = [];
   for (let i = 11; i >= 0; i--) {
@@ -1078,7 +1093,7 @@ export default async function Home(props: any = {}) {
                   <h3 className="text-lg font-black text-white uppercase tracking-widest">Trade Returns</h3>
                   <p className="text-xs text-teal-400 font-bold tracking-widest mt-1">{new Date(bsklModalDate).toLocaleDateString('en-MY', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
                 </div>
-                <a href={`?month=${currentSelectedMonth}${isEditing ? '&edit=true' : ''}`} className="text-[#8a93a6] hover:text-white text-2xl leading-none">&times;</a>
+                <a href={`?month=${currentSelectedMonth}&bsklMonth=${bsklSelectedMonth}${isEditing ? '&edit=true' : ''}`} className="text-[#8a93a6] hover:text-white text-2xl leading-none">&times;</a>
               </div>
               <div className="p-6 space-y-4">
                 {enrichedContracts.filter((c: any) => {
@@ -1092,7 +1107,7 @@ export default async function Home(props: any = {}) {
                   const isPaid = modalStatus === 'COLLECTED';
                   const modalTier = c.hasTwoTier ? (modalDayEngine.tradingDayIndex > c.t1TargetDays ? 2 : 1) : 1;
                   
-                   if ((isReadOnly || isMonthClosed)) {
+                   if (isReadOnly) {
                     return (
                       <div key={c.id} className={`flex justify-between items-center p-4 rounded-xl border ${isPaid ? 'bg-teal-500/10 border-teal-500/30' : 'bg-[#0b0e14] border-[#383e52]'}`}> 
                         <div>
@@ -2185,19 +2200,25 @@ export default async function Home(props: any = {}) {
                     ))
                   )}
                   <div className="p-3 sm:p-6 bg-[#0b0e14]">
+                    {/* BSKL Independent Month Slider */}
+                    <div className="flex justify-center items-center gap-4 mb-4">
+                      <a href={`?month=${currentSelectedMonth}&bsklMonth=${bsklPrevMonthStr}${sp.bsklModal ? `&bsklModal=${sp.bsklModal}` : ''}${isEditing ? '&edit=true' : ''}`} className="text-[8px] sm:text-[9px] font-bold text-[#8a93a6] hover:text-white uppercase tracking-widest transition-colors">&laquo; {bsklPrevMonthLabel}</a>
+                      <span className="text-[10px] sm:text-xs font-bold text-teal-400 uppercase tracking-widest">{bsklFormattedMonthDisplay}</span>
+                      <a href={`?month=${currentSelectedMonth}&bsklMonth=${bsklNextMonthStr}${sp.bsklModal ? `&bsklModal=${sp.bsklModal}` : ''}${isEditing ? '&edit=true' : ''}`} className="text-[8px] sm:text-[9px] font-bold text-[#8a93a6] hover:text-white uppercase tracking-widest transition-colors">{bsklNextMonthLabel} &raquo;</a>
+                    </div>
                     <div className="grid grid-cols-7 gap-1 sm:gap-2 mb-2">
                       {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day: string) => (
                         <div key={day} className="text-center text-[8px] sm:text-[9px] font-bold text-[#8a93a6] uppercase tracking-widest">{day}</div>
                       ))}
                     </div>
                     <div className="grid grid-cols-7 gap-1 sm:gap-2">
-                      {Array.from({ length: firstDayOfWeek }).map((_, i: number) => (
+                      {Array.from({ length: bsklFirstDayOfWeek }).map((_, i: number) => (
                         <div key={`empty-${i}`} />
                       ))}
-                      {Array.from({ length: daysInMonth }).map((_, i: number) => {
+                      {Array.from({ length: bsklDaysInMonth }).map((_, i: number) => {
                         const day = i + 1;
-                        const dateStr = `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                        const dayOfWeek = new Date(year, monthIndex, day).getDay();
+                        const dateStr = `${bsklYear}-${String(bsklMonthIndex + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                        const dayOfWeek = new Date(bsklYear, bsklMonthIndex, day).getDay();
                         const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
                         const isHoliday = bsklHolidays.some((h: any) => h.holiday_date === dateStr);
                         const dayContracts = enrichedContracts.filter((c: any) => {
@@ -2219,7 +2240,7 @@ export default async function Home(props: any = {}) {
                            const dayRate = dayEngine.rate;
                            const dayStatus = dayEngine.status;
                            const isPaid = dayStatus === 'COLLECTED';
-                           if ((isReadOnly || isMonthClosed)) {
+                           if (isReadOnly) {
                              return (
                                <div key={day} className={`aspect-square rounded flex flex-col items-center justify-center border p-0.5 sm:p-1 gap-0.5 ${isPaid ? 'bg-teal-500/10 border-teal-500/30' : (dayStatus === 'HOLIDAY' ? 'bg-[#0b0e14] border-[#272b38]/40' : 'bg-[#161a23] border-[#383e52]')}`}>
                                  <span className={`text-[8px] sm:text-[9px] font-normal leading-none ${isPaid ? 'text-teal-400/60' : (dayStatus === 'HOLIDAY' ? 'text-[#383e52]' : 'text-[#8a93a6]/60')}`}>{day}</span>
@@ -2241,7 +2262,7 @@ export default async function Home(props: any = {}) {
                            );
                         }
                         return (
-                          <a key={day} href={`?month=${currentSelectedMonth}&bsklModal=${dateStr}${isEditing ? '&edit=true' : ''}`} className="aspect-square rounded flex flex-col items-center justify-center transition-all border bg-[#161a23] border-[#383e52] hover:border-amber-500/40 p-0.5 sm:p-1 gap-0.5">
+                          <a key={day} href={`?month=${currentSelectedMonth}&bsklMonth=${bsklSelectedMonth}&bsklModal=${dateStr}${isEditing ? '&edit=true' : ''}`} className="aspect-square rounded flex flex-col items-center justify-center transition-all border bg-[#161a23] border-[#383e52] hover:border-amber-500/40 p-0.5 sm:p-1 gap-0.5">
                              <span className="text-[8px] sm:text-[9px] font-normal text-[#8a93a6]/60 leading-none">{day}</span>
                              {dayContracts.map((cc: any) => {
                                 const dd = getDayStatus(cc, dateStr);
