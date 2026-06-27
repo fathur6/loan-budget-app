@@ -1881,17 +1881,32 @@ export default async function Home(props: any = {}) {
                   const isExpanded = expandedDebtId == String(debt.id)
                   
                   // DYNAMIC ARREARS & PRINCIPAL AGEING LOGIC
-                  let currentArrears = n(debt.arrears_balance);
-                  let currentPrincipal = n(debt.total_debt_amount);
+                  // Scan payment history across ALL tracked months to calculate true arrears
+                  let historicalUnpaidCount = 0
+                  let cumulativeArrears = 0
+                  historyMonths.forEach((m: any) => {
+                    if (m.monthId > currentMonthId) return // skip future
+                    let tracked = true
+                    if (debt.start_date && m.monthId < debt.start_date.substring(0, 7)) tracked = false
+                    if (debt.end_date && m.monthId > debt.end_date.substring(0, 7)) tracked = false
+                    if (!tracked) return
+                    const wasPaid = allDebtPayments.some((dp: any) => dp.debt_id == debt.id && dp.paid_month === m.monthId)
+                    if (!wasPaid) {
+                      historicalUnpaidCount++
+                      cumulativeArrears += n(debt.monthly_due)
+                    }
+                  })
+                  
+                  let currentArrears = Math.max(n(debt.arrears_balance), cumulativeArrears)
+                  let currentPrincipal = n(debt.total_debt_amount)
                   
                   if (debtIsPaidThisMonth) {
-                    // Formula dinamik: Tunggakan sedia ada + (Ansuran Bulanan - Amaun yang dibayar)
-                    currentArrears = Math.max(0, currentArrears + n(debt.monthly_due) - actualAmountPaid);
-                    // Tolak principal secara visual (anggaran awal sebelum disegerak dengan bank)
-                    currentPrincipal = Math.max(0, currentPrincipal - actualAmountPaid);
+                    currentArrears = Math.max(0, currentArrears + n(debt.monthly_due) - actualAmountPaid)
+                    currentPrincipal = Math.max(0, currentPrincipal - actualAmountPaid)
                   }
                   
-                  const arrearsCount = n(debt.monthly_due) > 0 ? Math.floor(currentArrears / n(debt.monthly_due)) : 0;
+                  const arrearsCount = n(debt.monthly_due) > 0 ? Math.ceil(currentArrears / n(debt.monthly_due)) : 0;
+                  const historicalArrearsCount = n(debt.monthly_due) > 0 ? Math.ceil(cumulativeArrears / n(debt.monthly_due)) : 0;
 
                   let statusText = 'Outstanding';
                   let statusColor = 'text-amber-400';
@@ -2037,6 +2052,19 @@ export default async function Home(props: any = {}) {
                                       const isFuture = m.monthId > currentMonthId;
                                       const isMonthCurrent = m.monthId === currentMonthId;
                                       
+                                      // Calculate running arrears count up to this month
+                                      let runningArrears = 0
+                                      for (let j = 0; j <= i; j++) {
+                                        const hm = historyMonths[j]
+                                        if (hm.monthId > currentMonthId) break
+                                        let t = true
+                                        if (debt.start_date && hm.monthId < debt.start_date.substring(0, 7)) t = false
+                                        if (debt.end_date && hm.monthId > debt.end_date.substring(0, 7)) t = false
+                                        if (!t) continue
+                                        const paid = allDebtPayments.some((dp: any) => dp.debt_id == debt.id && dp.paid_month === hm.monthId)
+                                        if (!paid) runningArrears++
+                                      }
+                                      
                                       let content = '';
                                       let bgClass = 'bg-[#0b0e14]'; 
                                       let textClass = 'text-transparent';
@@ -2057,7 +2085,7 @@ export default async function Home(props: any = {}) {
                                               textClass = 'text-teal-400';
                                               borderClass = 'border-teal-500/40';
                                           } else if (isMonthPaid && actualAmountPaid < n(debt.monthly_due)) {
-                                              content = 'P'; // Indicates Partial Payment Fallback
+                                              content = 'P'; 
                                               textClass = 'text-rose-400';
                                               bgClass = 'bg-rose-500/10';
                                               borderClass = 'border-rose-500/40';
@@ -2072,11 +2100,18 @@ export default async function Home(props: any = {}) {
                                               borderClass = 'border-[#383e52] border-dashed';
                                           }
                                         } else {
-                                          // Displays the verified credit index for unpaid past months
-                                          content = arrearsCount > 0 ? String(arrearsCount) : '1';
-                                          bgClass = 'bg-rose-500/10';
-                                          textClass = 'text-rose-400';
-                                          borderClass = 'border-rose-500/40';
+                                          // Past unpaid month: show running arrears position
+                                          if (isMonthPaid) {
+                                            content = '✓';
+                                            bgClass = 'bg-teal-500/10';
+                                            textClass = 'text-teal-400';
+                                            borderClass = 'border-teal-500/40';
+                                          } else {
+                                            content = String(runningArrears);
+                                            bgClass = 'bg-rose-500/10';
+                                            textClass = 'text-rose-400';
+                                            borderClass = 'border-rose-500/40';
+                                          }
                                         }
                                       }
 
