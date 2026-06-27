@@ -765,7 +765,7 @@ export default async function Home(props: any = {}) {
       ? (isTier2Active ? tier2Rate : tier1Rate)
       : (tier1Rate || n(c.daily_rate));
     
-    // Two-tier progress bar widths (proportional to tier2Cap which is the final target Amount Y)
+    // Two-tier progress bar widths (proportional to tier2Cap which is the final target T2)
     const totalTarget = hasTwoTier ? tier2Cap : cCapital;
     const markerPct = hasTwoTier ? (tier1Cap / tier2Cap) * 100 : 0;
     const tier1Width = hasTwoTier
