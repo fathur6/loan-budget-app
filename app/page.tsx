@@ -1,3 +1,17 @@
+/*
+  SQL MIGRATION REQUIRED ─ run this in Supabase SQL Editor:
+  ─────────────────────────────────────────────────────────
+  CREATE TABLE IF NOT EXISTS month_status (
+    month_id TEXT PRIMARY KEY,
+    is_closed BOOLEAN DEFAULT false,
+    rollover_amount DECIMAL(10,2) DEFAULT 0,
+    closed_at TIMESTAMPTZ DEFAULT NOW()
+  );
+  ─────────────────────────────────────────────────────────
+  This table tracks which months have been closed and the
+  surplus amount that was rolled into the liquidity pool.
+*/
+
 // ---------- SERVER ACTIONS ----------
 
 // --- Perpetual Debt Tracking Actions ---
@@ -511,6 +525,43 @@ async function updateSalary(formData: FormData) {
   revalidatePath('/')
 }
 
+// --- Month Rollover / Close Month ---
+async function closeMonth(formData: FormData) {
+  'use server'
+  const supabasePath = "./supabase"
+  const cachePath = "next/cache"
+  const { supabase } = await import(supabasePath)
+  const { revalidatePath } = await import(cachePath)
+
+  const monthId = formData.get('monthId') as string
+  const nextMonthStr = formData.get('nextMonth') as string
+  const rolloverAmount = Number(formData.get('rolloverAmount') ?? 0)
+
+  // 1. Sweep all unsaved budget surpluses into the liquidity pool
+  const { data: monthBudgets } = await supabase.from('budgets')
+    .select('id, allocated_amount, spent_amount, is_saved')
+    .eq('budget_month', monthId + '-01')
+
+  if (monthBudgets) {
+    for (const b of monthBudgets) {
+      if (!b.is_saved) {
+        await supabase.from('budgets').update({ is_saved: true }).eq('id', b.id)
+      }
+    }
+  }
+
+  await supabase.from('month_status').upsert({
+    month_id: monthId,
+    is_closed: true,
+    rollover_amount: rolloverAmount,
+    closed_at: new Date().toISOString()
+  })
+
+  // 3. Redirect to next month
+  const { redirect } = await import('next/navigation')
+  redirect(`/?month=${nextMonthStr}`)
+}
+
 // ---------- MAIN PAGE COMPONENT ----------
 export default async function Home(props: any = {}) {
   const resolvedParams = props && props.searchParams ? props.searchParams : {};
@@ -544,6 +595,8 @@ export default async function Home(props: any = {}) {
   let bsklHolidays: any[] = [];
   let cashInflows: any[] = [];
   let currentSalary = 0;
+  let allMonthStatuses: any[] = [];
+  let currentMonthStatus: any = null;
 
   try {
     const headersPath = "next/headers"
@@ -601,12 +654,19 @@ export default async function Home(props: any = {}) {
       if (d9) currentSalary = Number(d9.salary_amount);
       if (d10) budgetTransactions = d10;
       if (d11) cashInflows = d11;
+
+      // Fetch month_status separately for rollover tracking
+      const { data: d12 } = await supabase.from('month_status').select('*')
+      if (d12) allMonthStatuses = d12
     }
   } catch (error) {
     // Canvas rendering protection
   }
+
+  currentMonthStatus = allMonthStatuses.find((ms: any) => ms.month_id === currentMonthId) || null
+  const isMonthClosed = currentMonthStatus?.is_closed === true
   
-  const isEditing = !isReadOnly && sp.edit === 'true'
+  const isEditing = !isReadOnly && sp.edit === 'true' && !isMonthClosed
 
   // Calendar Engines
   const year = parseInt(currentSelectedMonth.split('-')[0]);
@@ -704,7 +764,8 @@ export default async function Home(props: any = {}) {
   const totalTransferredFromPoolAllTime = transfers.reduce((s: number, t: any) => s + n(t.amount), 0);
   const poolTransfersInThisMonth = transfers.filter((t: any) => t.month_id === currentMonthId).reduce((s: number, t: any) => s + n(t.amount), 0);
   const totalCashInflowsAllTime = cashInflows.reduce((s: number, i: any) => s + n(i.amount), 0);
-  const currentPoolBalance = totalSavedAcrossAllMonths + totalBsklRepaidAllTime + totalCashInflowsAllTime - totalTransferredFromPoolAllTime;
+  const totalRolloverAcrossMonths = allMonthStatuses?.filter((ms: any) => ms.is_closed).reduce((s: number, ms: any) => s + n(ms.rollover_amount), 0) ?? 0
+  const currentPoolBalance = totalSavedAcrossAllMonths + totalBsklRepaidAllTime + totalCashInflowsAllTime + totalRolloverAcrossMonths - totalTransferredFromPoolAllTime;
 
   // --- CASHFLOW & GRAND TOTALS ---
   const currentCheckingBalance = currentSalary + poolTransfersInThisMonth - totalBudgetsAllocatedThisMonth - paidLoansStatementTotal - totalBsklCapitalOutflowThisMonth;
@@ -747,6 +808,14 @@ export default async function Home(props: any = {}) {
     month: 'long',
     year: 'numeric',
   }).toUpperCase()
+
+  // --- ROLLOVER ENGINE: Calculate surplus available for debt snowball / pool sweep ---
+  // Surplus = cash inflows - outflows for the month (ignoring already-saved budgets)
+  const totalInflowsThisMonth = currentSalary + poolTransfersInThisMonth + totalBsklRepaymentsInflowThisMonth
+  const totalOutflowsThisMonth = totalBudgetsAllocatedThisMonth + paidLoansStatementTotal + totalBsklCapitalOutflowThisMonth
+  const rolloverSurplus = Math.max(0, totalInflowsThisMonth - totalOutflowsThisMonth)
+  const shouldShowCloseMonth = !isReadOnly && !isMonthClosed && currentSalary > 0
+  const rolledOverThisMonth = currentMonthStatus?.rollover_amount ? n(currentMonthStatus.rollover_amount) : 0
 
   // --- CENTRALIZED TRANSACTION LOG ENGINE ---
   let systemLogs: any[] = [];
@@ -859,9 +928,9 @@ export default async function Home(props: any = {}) {
                 }).map((c: any) => {
                   const isPaid = bsklPayments.some((p: any) => p.contract_id === c.id && p.paid_date === bsklModalDate);
                   
-                  if (isReadOnly) {
+                   if ((isReadOnly || isMonthClosed)) {
                     return (
-                      <div key={c.id} className={`flex justify-between items-center p-4 rounded-xl border ${isPaid ? 'bg-teal-500/10 border-teal-500/30' : 'bg-[#0b0e14] border-[#383e52]'}`}>
+                      <div key={c.id} className={`flex justify-between items-center p-4 rounded-xl border ${isPaid ? 'bg-teal-500/10 border-teal-500/30' : 'bg-[#0b0e14] border-[#383e52]'}`}> 
                         <div>
                           <p className={`font-bold ${isPaid ? 'text-teal-400' : 'text-white'}`}>{c.name}</p>
                           <p className="text-[10px] text-[#8a93a6] uppercase tracking-widest mt-1">RM {n(c.daily_rate).toFixed(2)}</p>
@@ -942,7 +1011,7 @@ export default async function Home(props: any = {}) {
                            </p>
                          </div>
                        </div>
-                       {!isReadOnly && (
+                   {!isReadOnly && !isMonthClosed && (
                          <div className="flex justify-end gap-2 border-t border-[#272b38] pt-3 mt-1">
                            {(log.source === 'budget' || log.source === 'transfer' || log.source === 'inflow') && !isEditingLog && (
                              <a href={`?month=${currentSelectedMonth}&log=true&editLog=${log.id}${isEditing ? '&edit=true' : ''}`} className="text-[9px] uppercase tracking-widest font-bold px-4 py-2 bg-[#161a23] text-amber-400 border border-amber-500/30 rounded-lg hover:bg-amber-500/10 transition-colors">Amend</a>
@@ -995,6 +1064,10 @@ export default async function Home(props: any = {}) {
             <div className="text-[9px] md:text-xs font-bold px-4 py-2 sm:px-5 sm:py-2.5 rounded-full border bg-[#161a23] text-[#8a93a6] border-[#272b38] uppercase tracking-widest flex items-center gap-2">
               <span className="w-1.5 h-1.5 rounded-full bg-[#8a93a6]"></span> VIEWER MODE
             </div>
+          ) : isMonthClosed ? (
+            <div className="text-[9px] sm:text-[10px] md:text-xs font-bold px-4 py-2 sm:px-5 sm:py-2.5 rounded-full border border-emerald-500/30 text-emerald-400 bg-emerald-500/10 uppercase tracking-widest flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> MONTH LOCKED
+            </div>
           ) : (
             <a
               href={`?month=${currentSelectedMonth}${isEditing ? '' : '&edit=true'}`}
@@ -1026,6 +1099,57 @@ export default async function Home(props: any = {}) {
             </a>
           </div>
 
+          {/* --- ROLLOVER / CLOSE MONTH BANNER --- */}
+          {isMonthClosed ? (
+            <div className="max-w-2xl mx-auto mb-4 sm:mb-8 bg-emerald-500/5 border border-emerald-500/20 rounded-2xl p-5 sm:p-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <div>
+                <p className="text-[10px] sm:text-[11px] text-emerald-400 font-semibold uppercase tracking-[0.15em] flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                  Month Closed
+                </p>
+                <p className="text-[8px] sm:text-[9px] text-[#8a93a6] mt-1 uppercase tracking-widest">
+                  {formattedMonthDisplay} &bull; Surplus swept to Liquidity Pool
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-[9px] text-[#8a93a6] uppercase tracking-widest font-bold">Rollover Captured</p>
+                <p className="text-lg sm:text-xl font-bold text-emerald-400 mt-0.5 tracking-tight">
+                  +RM {rolledOverThisMonth.toFixed(2)}
+                </p>
+              </div>
+            </div>
+          ) : shouldShowCloseMonth ? (
+            <div className="max-w-2xl mx-auto mb-4 sm:mb-8">
+              <form action={closeMonth} className="bg-gradient-to-r from-[#161a23] to-[#1a1f2e] border border-amber-500/20 hover:border-amber-500/40 rounded-2xl p-5 sm:p-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 transition-all shadow-[0_0_20px_rgba(251,191,36,0.05)]">
+                <input type="hidden" name="monthId" value={currentMonthId} />
+                <input type="hidden" name="nextMonth" value={nextMonthStr} />
+                <input type="hidden" name="rolloverAmount" value={rolloverSurplus.toFixed(2)} />
+                
+                <div>
+                  <p className="text-[10px] sm:text-[11px] text-amber-400 font-semibold uppercase tracking-[0.15em] flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+                    Close Month &amp; Rollover
+                  </p>
+                  <p className="text-[8px] sm:text-[9px] text-[#8a93a6] mt-1 uppercase tracking-widest leading-relaxed">
+                    Sweep surplus into Liquidity Pool &bull; Save all budget leftovers &bull; Advance to {nextMonthLabel}
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-3 sm:gap-4 w-full sm:w-auto">
+                  <div className="text-right flex-shrink-0">
+                    <p className="text-[8px] text-[#8a93a6] uppercase tracking-widest font-bold">Surplus to Sweep</p>
+                    <p className={`text-lg sm:text-xl font-bold tracking-tight mt-0.5 ${rolloverSurplus > 0 ? 'text-teal-400' : 'text-[#8a93a6]'}`}>
+                      +RM {rolloverSurplus.toFixed(2)}
+                    </p>
+                  </div>
+                  <button type="submit" className={`px-5 py-2.5 sm:px-6 sm:py-3 rounded-xl font-black text-[10px] sm:text-[11px] uppercase tracking-widest transition-all border ${rolloverSurplus > 0 ? 'bg-amber-500/10 text-amber-400 border-amber-500/40 hover:bg-amber-500/20 shadow-[0_0_15px_rgba(251,191,36,0.15)]' : 'bg-[#0b0e14] text-[#8a93a6] border-[#272b38]'}`}>
+                    {rolloverSurplus > 0 ? 'Execute Rollover' : 'Close Month'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          ) : null}
+
           {/* --- 4-COLUMN RESPONSIVE METRICS GRID --- */}
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6">
             
@@ -1039,7 +1163,7 @@ export default async function Home(props: any = {}) {
                 <p className={`text-2xl sm:text-3xl md:text-4xl font-bold mt-2 tracking-tight ${currentCheckingBalance < 0 ? 'text-rose-400' : 'text-amber-400'}`}>
                   RM {currentCheckingBalance.toLocaleString('en-MY', { minimumFractionDigits: 2 })}
                 </p>
-                {!isReadOnly && (
+                {!isReadOnly && !isMonthClosed && (
                   <form action={updateSalary} className="flex gap-2 mt-4 sm:mt-5">
                     <input type="hidden" name="monthId" value={currentMonthId} />
                     <input type="number" step="0.01" name="amount" defaultValue={currentSalary || ''} placeholder="Set Salary..." className="w-full bg-[#0b0e14] border border-[#272b38] rounded-lg px-2.5 py-2 text-white placeholder-[#8a93a6] text-xs outline-none focus:border-amber-500/50" />
@@ -1167,7 +1291,7 @@ export default async function Home(props: any = {}) {
                 </p>
               </div>
               <div className="relative z-10 mt-4 sm:mt-5">
-                {!isReadOnly && (
+                {!isReadOnly && !isMonthClosed && (
                   <form action={transferFromPool} className="flex gap-2">
                     <input type="hidden" name="monthId" value={currentMonthId} />
                     <input type="number" step="0.01" name="amount" placeholder="Withdraw..." max={currentPoolBalance > 0 ? currentPoolBalance : 0} className="w-full bg-[#0b0e14] border border-[#272b38] rounded-lg px-2.5 py-2 text-white placeholder-[#8a93a6] text-xs outline-none focus:border-teal-500/50" />
@@ -1177,6 +1301,9 @@ export default async function Home(props: any = {}) {
                 <div className="space-y-1.5 font-medium text-[#8a93a6] mt-4 text-[9px] border-t border-[#272b38]/50 pt-3">
                   <div className="flex justify-between items-center"><span className="uppercase tracking-widest">Total Pooled IN</span> <span className="text-teal-400 font-mono">+{totalSavedAcrossAllMonths.toFixed(2)}</span></div>
                   <div className="flex justify-between items-center"><span className="uppercase tracking-widest">Trade Returns IN</span> <span className="text-teal-400 font-mono">+{totalBsklRepaidAllTime.toFixed(2)}</span></div>
+                  {totalRolloverAcrossMonths > 0 && (
+                    <div className="flex justify-between items-center"><span className="uppercase tracking-widest">Month Rollovers IN</span> <span className="text-teal-400 font-mono">+{totalRolloverAcrossMonths.toFixed(2)}</span></div>
+                  )}
                   {totalCashInflowsAllTime > 0 && (
                     <div className="flex justify-between items-center"><span className="uppercase tracking-widest">Cash Inflows IN</span> <span className="text-teal-400 font-mono">+{totalCashInflowsAllTime.toFixed(2)}</span></div>
                   )}
@@ -1552,7 +1679,7 @@ export default async function Home(props: any = {}) {
                                 <p className="text-[9px] font-bold text-teal-400 uppercase tracking-widest mt-0.5">Total Paid: RM {actualAmountPaid.toFixed(2)}</p>
                               )}
                             </div>
-                            {isReadOnly ? (
+                            {(isReadOnly || isMonthClosed) ? (
                               <span className={`text-[8px] sm:text-[9px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-full border bg-[#0b0e14] ${debtIsPaidThisMonth ? 'text-teal-400 border-teal-500/20' : 'text-[#8a93a6] border-[#272b38]'}`}>
                                 {debtIsPaidThisMonth ? 'Paid' : 'Outstanding'}
                               </span>
@@ -1813,7 +1940,7 @@ export default async function Home(props: any = {}) {
                         if (dayContracts.length === 1) {
                            const c = dayContracts[0];
                            const isPaid = bsklPayments.some((p: any) => p.contract_id === c.id && p.paid_date === dateStr);
-                           if (isReadOnly) {
+                           if ((isReadOnly || isMonthClosed)) {
                              return (
                                <div key={day} className={`aspect-square rounded flex flex-col items-center justify-center border p-0.5 sm:p-1 gap-0.5 ${isPaid ? 'bg-teal-500/10 border-teal-500/30' : 'bg-[#161a23] border-[#383e52]'}`}>
                                  <span className={`text-[8px] sm:text-[9px] font-normal leading-none ${isPaid ? 'text-teal-400/60' : 'text-[#8a93a6]/60'}`}>{day}</span>
@@ -1862,7 +1989,7 @@ export default async function Home(props: any = {}) {
                 </div>
                 <div className="bg-[#161a23] border border-[#272b38] rounded-xl shadow-sm overflow-hidden hover:border-[#383e52] transition-colors p-4 sm:p-5 md:p-6">
                    
-                   {!isReadOnly && (
+                   {!isReadOnly && !isMonthClosed && (
                       <form action={addCashInflow} className="flex flex-col sm:flex-row gap-3 mb-6">
                           <input type="hidden" name="monthId" value={currentMonthId} />
                           <div className="flex-1">
@@ -1911,7 +2038,7 @@ export default async function Home(props: any = {}) {
               {budgets?.length === 0 ? (
                 <div className="bg-[#161a23] border border-[#272b38] border-dashed rounded-xl p-8 sm:p-10 flex flex-col items-center justify-center text-center gap-4 sm:gap-5">
                   <p className="text-[#8a93a6] text-sm">No operating budgets allocated for {formattedMonthDisplay} yet.</p>
-                  {!isReadOnly && (
+                  {!isReadOnly && !isMonthClosed && (
                     <form action={duplicatePreviousBudgets}>
                       <input type="hidden" name="currentMonth" value={currentSelectedMonth} />
                       <input type="hidden" name="prevMonth" value={prevMonthStr} />
@@ -1949,7 +2076,7 @@ export default async function Home(props: any = {}) {
                         </div>
 
                         <div className="flex flex-col xl:flex-row justify-between xl:items-end gap-4 sm:gap-5">
-                          {isReadOnly ? (
+                          {(isReadOnly || isMonthClosed) ? (
                             <div className="flex-1 bg-[#0b0e14] p-3 rounded-lg border border-[#272b38] xl:max-w-xs">
                               <p className="text-[9px] text-[#8a93a6] font-bold uppercase tracking-[0.1em] mb-1">Spent Amount</p>
                               <p className="font-mono text-white text-sm font-bold">RM {spent.toFixed(2)}</p>
@@ -2009,7 +2136,7 @@ export default async function Home(props: any = {}) {
                               <span className="text-[9px] uppercase tracking-widest font-bold text-teal-500 flex items-center gap-1.5">
                                 <span className="w-3 sm:w-3.5 h-3 sm:h-3.5 rounded-full bg-teal-500/20 flex items-center justify-center text-[8px] sm:text-[10px]">✓</span>In Pool
                               </span>
-                              {!isReadOnly && (
+                              {!isReadOnly && !isMonthClosed && (
                                 <>
                                   <div className="w-px h-4 bg-[#272b38]"></div>
                                   <form action={undoSavings}>
@@ -2020,7 +2147,7 @@ export default async function Home(props: any = {}) {
                               )}
                             </div>
                           ) : (
-                            !isReadOnly && (
+                            !isReadOnly && !isMonthClosed && (
                               <form action={sendToSavings}>
                                 <input type="hidden" name="id" value={budget.id} />
                                 <button type="submit" disabled={remaining <= 0} className="text-[10px] uppercase tracking-widest font-bold px-4 py-2 sm:px-5 sm:py-2.5 rounded-full border border-teal-500/40 text-teal-400 bg-teal-500/10 hover:bg-teal-500/20 transition-all disabled:opacity-30 disabled:hover:bg-teal-500/10">Approve & Send to Pool</button>
