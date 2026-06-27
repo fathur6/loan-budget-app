@@ -354,12 +354,17 @@ async function carryForwardBudget(formData: FormData) {
   const id = formData.get('id') as string
   const category = formData.get('category') as string
   const remaining = Number(formData.get('remaining') ?? 0)
+  const allocated = Number(formData.get('allocated') ?? 0)
   const nextMonth = formData.get('nextMonth') as string
 
   if (remaining <= 0) return
 
-  // 1. Mark current budget as saved (locked)
-  await supabase.from('budgets').update({ is_saved: true }).eq('id', id)
+  // 1. Lock current budget AND zero out remaining so nothing flows to pool
+  //    (spent_amount = allocated_amount makes remaining = 0)
+  await supabase.from('budgets').update({ 
+    is_saved: true,
+    spent_amount: allocated 
+  }).eq('id', id)
 
   // 2. Upsert next month's budget for same category — add carried amount
   const { data: existing } = await supabase.from('budgets')
@@ -2421,6 +2426,7 @@ export default async function Home(props: any = {}) {
                                     <input type="hidden" name="id" value={budget.id} />
                                     <input type="hidden" name="category" value={budget.category} />
                                     <input type="hidden" name="remaining" value={remaining} />
+                                    <input type="hidden" name="allocated" value={allocated} />
                                     <input type="hidden" name="nextMonth" value={`${nextMonthDate.getFullYear()}-${String(nextMonthDate.getMonth() + 1).padStart(2, '0')}-01`} />
                                     <button type="submit" disabled={remaining <= 0} className="text-[10px] uppercase tracking-widest font-bold px-4 py-2 sm:px-5 sm:py-2.5 rounded-full border border-blue-500/30 text-blue-400 bg-transparent hover:bg-blue-500/10 transition-all disabled:opacity-30">Carry Forward</button>
                                   </form>
