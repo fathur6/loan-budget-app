@@ -1520,11 +1520,11 @@ export default async function Home(props: any = {}) {
                                 <label className="text-[8px] text-teal-400 uppercase tracking-widest font-bold block mb-2">Tier 1 — Initial Engine</label>
                                 <div className="grid grid-cols-2 gap-3">
                                   <div>
-                                    <label className="text-[8px] text-[#8a93a6] uppercase tracking-widest">Rate / Day (x)</label>
+                                    <label className="text-[8px] text-[#8a93a6] uppercase tracking-widest">Rate / Day (T1)</label>
                                     <input name="tier1Rate" type="number" step="0.01" required defaultValue={n(c.tier1_daily_rate || c.daily_rate).toFixed(2)} className="w-full bg-[#161a23] border border-teal-500/20 rounded px-2 py-1 text-teal-400 font-mono text-xs mt-1 outline-none focus:border-teal-500/50" />
                                   </div>
                                   <div>
-                                    <label className="text-[8px] text-[#8a93a6] uppercase tracking-widest">Cap (Amount X)</label>
+                                    <label className="text-[8px] text-[#8a93a6] uppercase tracking-widest">Cap (Amount T1)</label>
                                     <input name="tier1Cap" type="number" step="0.01" required defaultValue={n(c.tier1_cap).toFixed(2)} className="w-full bg-[#161a23] border border-teal-500/20 rounded px-2 py-1 text-teal-300 font-mono text-xs mt-1 outline-none focus:border-teal-500/50" />
                                   </div>
                                 </div>
@@ -1533,11 +1533,11 @@ export default async function Home(props: any = {}) {
                                 <label className="text-[8px] text-purple-400 uppercase tracking-widest font-bold block mb-2">Tier 2 — Booster Engine</label>
                                 <div className="grid grid-cols-2 gap-3">
                                   <div>
-                                    <label className="text-[8px] text-[#8a93a6] uppercase tracking-widest">Rate / Day (y)</label>
+                                    <label className="text-[8px] text-[#8a93a6] uppercase tracking-widest">Rate / Day (T2)</label>
                                     <input name="tier2Rate" type="number" step="0.01" required defaultValue={n(c.tier2_daily_rate).toFixed(2)} className="w-full bg-[#161a23] border border-purple-500/20 rounded px-2 py-1 text-purple-400 font-mono text-xs mt-1 outline-none focus:border-purple-500/50" />
                                   </div>
                                   <div>
-                                    <label className="text-[8px] text-[#8a93a6] uppercase tracking-widest">Final Cap (Amount Y)</label>
+                                    <label className="text-[8px] text-[#8a93a6] uppercase tracking-widest">Final Cap (Amount T2)</label>
                                     <input name="tier2Cap" type="number" step="0.01" required defaultValue={n(c.tier2_cap).toFixed(2)} className="w-full bg-[#161a23] border border-purple-500/20 rounded px-2 py-1 text-purple-300 font-mono text-xs mt-1 outline-none focus:border-purple-500/50" />
                                   </div>
                                 </div>
@@ -1593,11 +1593,11 @@ export default async function Home(props: any = {}) {
                           <label className="text-[9px] text-teal-400 uppercase tracking-widest font-bold block mb-2">Tier 1 — Initial Engine</label>
                           <div className="grid grid-cols-2 gap-3">
                             <div>
-                              <label className="text-[8px] text-[#8a93a6] uppercase tracking-widest">Rate / Day (x)</label>
+                              <label className="text-[8px] text-[#8a93a6] uppercase tracking-widest">Rate / Day (T1)</label>
                               <input name="tier1Rate" type="number" step="0.01" required className="w-full bg-[#0b0e14] border border-teal-500/20 rounded-lg px-2.5 py-2 text-teal-400 font-mono text-xs outline-none focus:border-teal-500/50 transition-colors" />
                             </div>
                             <div>
-                              <label className="text-[8px] text-[#8a93a6] uppercase tracking-widest">Cap (Amount X)</label>
+                              <label className="text-[8px] text-[#8a93a6] uppercase tracking-widest">Cap (Amount T1)</label>
                               <input name="tier1Cap" type="number" step="0.01" required className="w-full bg-[#0b0e14] border border-teal-500/20 rounded-lg px-2.5 py-2 text-teal-300 font-mono text-xs outline-none focus:border-teal-500/50 transition-colors" />
                             </div>
                           </div>
@@ -1606,11 +1606,11 @@ export default async function Home(props: any = {}) {
                           <label className="text-[9px] text-purple-400 uppercase tracking-widest font-bold block mb-2">Tier 2 — Booster Engine</label>
                           <div className="grid grid-cols-2 gap-3">
                             <div>
-                              <label className="text-[8px] text-[#8a93a6] uppercase tracking-widest">Rate / Day (y)</label>
+                              <label className="text-[8px] text-[#8a93a6] uppercase tracking-widest">Rate / Day (T2)</label>
                               <input name="tier2Rate" type="number" step="0.01" required className="w-full bg-[#0b0e14] border border-purple-500/20 rounded-lg px-2.5 py-2 text-purple-400 font-mono text-xs outline-none focus:border-purple-500/50 transition-colors" />
                             </div>
                             <div>
-                              <label className="text-[8px] text-[#8a93a6] uppercase tracking-widest">Final Cap (Amount Y)</label>
+                              <label className="text-[8px] text-[#8a93a6] uppercase tracking-widest">Final Cap (Amount T2)</label>
                               <input name="tier2Cap" type="number" step="0.01" required className="w-full bg-[#0b0e14] border border-purple-500/20 rounded-lg px-2.5 py-2 text-purple-300 font-mono text-xs outline-none focus:border-purple-500/50 transition-colors" />
                             </div>
                           </div>
@@ -2015,13 +2015,13 @@ export default async function Home(props: any = {}) {
                               <div style={{ width: `${c.tier2Width}%`, left: `${c.markerPct}%` }} className={`absolute top-0 h-full bg-gradient-to-r from-purple-600 to-purple-400 transition-all duration-700 ease-out ${c.maxedOutTier2 ? 'rounded-r-full' : ''}`} />
                               <div style={{ left: `${c.markerPct}%` }} className="absolute top-[-3px] w-[2px] h-[28px] bg-slate-400 shadow-[0_0_6px_rgba(255,255,255,0.3)] z-10 pointer-events-none">
                                 <span className="absolute bottom-[-16px] left-1/2 transform -translate-x-1/2 text-[8px] font-mono text-[#8a93a6] whitespace-nowrap font-bold">
-                                  X (RM {c.tier1Cap.toFixed(0)})
+                                  T1 (RM {c.tier1Cap.toFixed(0)})
                                 </span>
                               </div>
                             </div>
                             <div className="flex justify-between items-center text-[9px] font-mono text-[#8a93a6] px-1">
                               <span>RM 0</span>
-                              <span className="text-purple-400 font-bold">Y: RM {c.tier2Cap.toFixed(2)}</span>
+                              <span className="text-purple-400 font-bold">T2: RM {c.tier2Cap.toFixed(2)}</span>
                             </div>
                           </div>
                         ) : (
