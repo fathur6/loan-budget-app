@@ -2165,8 +2165,16 @@ export default async function Home(props: any = {}) {
                        <h3 className="text-lg font-bold text-[#8a93a6]">No Active Contracts</h3>
                     </div>
                   ) : (
-                    enrichedContracts.map((c: any, idx: number) => (
-                      <div key={c.id} className={`p-4 sm:p-6 ${idx !== enrichedContracts.length - 1 ? 'border-b border-[#272b38]' : 'border-b-4 border-[#0b0e14]'} flex flex-col gap-4 sm:gap-5`}>
+                    <div>
+                    <div className="p-3 sm:p-6 bg-[#0b0e14] border-b border-[#272b38]">
+                      <div className="flex justify-center items-center gap-4">
+                        <a href={`?month=${currentSelectedMonth}&bsklMonth=${bsklPrevMonthStr}${isEditing ? '&edit=true' : ''}`} className="text-[8px] sm:text-[9px] font-bold text-[#8a93a6] hover:text-white uppercase tracking-widest transition-colors">&laquo; {bsklPrevMonthLabel}</a>
+                        <span className="text-[10px] sm:text-xs font-bold text-teal-400 uppercase tracking-widest">{bsklFormattedMonthDisplay}</span>
+                        <a href={`?month=${currentSelectedMonth}&bsklMonth=${bsklNextMonthStr}${isEditing ? '&edit=true' : ''}`} className="text-[8px] sm:text-[9px] font-bold text-[#8a93a6] hover:text-white uppercase tracking-widest transition-colors">{bsklNextMonthLabel} &raquo;</a>
+                      </div>
+                    </div>
+                    {enrichedContracts.map((c: any, idx: number) => (
+                      <div key={c.id} className="p-4 sm:p-6 border-b border-[#272b38] flex flex-col gap-4 sm:gap-5">
                         <div className="flex justify-between items-start gap-2">
                           <div>
                             <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
@@ -2230,89 +2238,77 @@ export default async function Home(props: any = {}) {
                               />
                             )}
                           </div>
-                        )}
+                          )}
+                        {/* Per-contract Calendar */}
+                        <div className="border-t border-[#272b38] pt-4">
+                          <div className="grid grid-cols-7 gap-1 sm:gap-2 mb-2">
+                            {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map((d: string) => (
+                              <div key={d} className="text-center text-[8px] sm:text-[9px] font-bold text-[#8a93a6] uppercase tracking-widest">{d}</div>
+                            ))}
+                          </div>
+                          <div className="grid grid-cols-7 gap-1 sm:gap-2">
+                            {Array.from({ length: bsklFirstDayOfWeek }).map((_, i: number) => (
+                              <div key={`e-${i}`} />
+                            ))}
+                            {Array.from({ length: bsklDaysInMonth }).map((_, i: number) => {
+                              const day = i + 1;
+                              const dateStr = `${bsklYear}-${String(bsklMonthIndex + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                              const dayOfWeek = new Date(bsklYear, bsklMonthIndex, day).getDay();
+                              const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+                              const isHoliday = bsklHolidays.some((h: any) => h.holiday_date === dateStr);
+                              if (isWeekend || isHoliday) {
+                                return (
+                                  <div key={day} className="aspect-square rounded bg-[#0b0e14] flex flex-col items-center justify-center text-[#383e52] font-bold text-[9px] sm:text-xs border border-[#272b38]/40">
+                                    {day}
+                                  </div>
+                                );
+                              }
+                              const cEffDate = c.effective_date;
+                              const cEndDate = c.end_date || '2099-12-31';
+                              const isOffPeriod = dateStr < cEffDate || dateStr > cEndDate;
+                              if (isOffPeriod) {
+                                return (
+                                  <div key={day} className="aspect-square rounded bg-[#0b0e14] flex flex-col items-center justify-center text-[#383e52] font-bold text-[9px] sm:text-xs border border-[#272b38]/40">
+                                    {day}
+                                  </div>
+                                );
+                              }
+                              const dayEngine = getDayStatus(c, dateStr);
+                              const dayRate = dayEngine.rate;
+                              const dayStatus = dayEngine.status;
+                              const isPaid = dayStatus === 'COLLECTED';
+                              if (isReadOnly) {
+                                return (
+                                  <div key={day} className={`aspect-square rounded flex flex-col items-center justify-center border p-0.5 sm:p-1 gap-0.5 ${isPaid ? 'bg-teal-500/10 border-teal-500/30' : 'bg-[#161a23] border-[#383e52]'}`}>
+                                    <span className={`text-[8px] sm:text-[9px] font-normal leading-none ${isPaid ? 'text-teal-400/60' : 'text-[#8a93a6]/60'}`}>{day}</span>
+                                    {dayRate > 0 && <span className={`text-[8px] sm:text-[11px] font-bold leading-none ${isPaid ? 'text-teal-400' : 'text-[#8a93a6]'}`}>{dayRate.toFixed(2)}</span>}
+                                  </div>
+                                );
+                              }
+                              return (
+                                <form key={day} action={toggleBsklPayment} className="aspect-square">
+                                  <input type="hidden" name="contract_id" value={c.id} />
+                                  <input type="hidden" name="date" value={dateStr} />
+                                  <input type="hidden" name="amount" value={dayRate} />
+                                  <input type="hidden" name="isPaid" value={String(isPaid)} />
+                                  <button type="submit" className={`w-full h-full rounded flex flex-col items-center justify-center transition-all border p-0.5 sm:p-1 gap-0.5 ${isPaid ? 'bg-teal-500/10 border-teal-500/30 hover:bg-teal-500/20' : 'bg-[#161a23] border-[#383e52] hover:border-amber-500/40'}`}>
+                                    <span className={`text-[8px] sm:text-[9px] font-normal leading-none ${isPaid ? 'text-teal-400/60' : 'text-[#8a93a6]/60'}`}>{day}</span>
+                                    {dayRate > 0 && <span className={`text-[8px] sm:text-[11px] font-bold leading-none ${isPaid ? 'text-teal-400' : 'text-[#8a93a6]'}`}>{dayRate.toFixed(2)}</span>}
+                                  </button>
+                                </form>
+                              );
+                            })}
+                          </div>
+                        </div>
                       </div>
                     ))
+                  }
+                    </div>
                   )}
-                  <div className="p-3 sm:p-6 bg-[#0b0e14]">
-                    {/* BSKL Independent Month Slider */}
-                    <div className="flex justify-center items-center gap-4 mb-4">
-                      <a href={`?month=${currentSelectedMonth}&bsklMonth=${bsklPrevMonthStr}${sp.bsklModal ? `&bsklModal=${sp.bsklModal}` : ''}${isEditing ? '&edit=true' : ''}`} className="text-[8px] sm:text-[9px] font-bold text-[#8a93a6] hover:text-white uppercase tracking-widest transition-colors">&laquo; {bsklPrevMonthLabel}</a>
-                      <span className="text-[10px] sm:text-xs font-bold text-teal-400 uppercase tracking-widest">{bsklFormattedMonthDisplay}</span>
-                      <a href={`?month=${currentSelectedMonth}&bsklMonth=${bsklNextMonthStr}${sp.bsklModal ? `&bsklModal=${sp.bsklModal}` : ''}${isEditing ? '&edit=true' : ''}`} className="text-[8px] sm:text-[9px] font-bold text-[#8a93a6] hover:text-white uppercase tracking-widest transition-colors">{bsklNextMonthLabel} &raquo;</a>
-                    </div>
-                    <div className="grid grid-cols-7 gap-1 sm:gap-2 mb-2">
-                      {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day: string) => (
-                        <div key={day} className="text-center text-[8px] sm:text-[9px] font-bold text-[#8a93a6] uppercase tracking-widest">{day}</div>
-                      ))}
-                    </div>
-                    <div className="grid grid-cols-7 gap-1 sm:gap-2">
-                      {Array.from({ length: bsklFirstDayOfWeek }).map((_, i: number) => (
-                        <div key={`empty-${i}`} />
-                      ))}
-                      {Array.from({ length: bsklDaysInMonth }).map((_, i: number) => {
-                        const day = i + 1;
-                        const dateStr = `${bsklYear}-${String(bsklMonthIndex + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                        const dayOfWeek = new Date(bsklYear, bsklMonthIndex, day).getDay();
-                        const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-                        const isHoliday = bsklHolidays.some((h: any) => h.holiday_date === dateStr);
-                        const dayContracts = enrichedContracts.filter((c: any) => {
-                           if (isWeekend || isHoliday) return false;
-                           const cEffDate = c.effective_date;
-                           const cEndDate = c.end_date || '2099-12-31';
-                           return dateStr >= cEffDate && dateStr <= cEndDate;
-                        });
-                        if (dayContracts.length === 0) {
-                          return (
-                            <div key={day} className="aspect-square rounded bg-[#0b0e14] flex flex-col items-center justify-center text-[#383e52] font-bold text-[9px] sm:text-xs border border-[#272b38]/40">
-                              {day}
-                            </div>
-                          );
-                        }
-                        if (dayContracts.length === 1) {
-                           const c = dayContracts[0];
-                           const dayEngine = getDayStatus(c, dateStr);
-                           const dayRate = dayEngine.rate;
-                           const dayStatus = dayEngine.status;
-                           const isPaid = dayStatus === 'COLLECTED';
-                           if (isReadOnly) {
-                             return (
-                               <div key={day} className={`aspect-square rounded flex flex-col items-center justify-center border p-0.5 sm:p-1 gap-0.5 ${isPaid ? 'bg-teal-500/10 border-teal-500/30' : (dayStatus === 'HOLIDAY' ? 'bg-[#0b0e14] border-[#272b38]/40' : 'bg-[#161a23] border-[#383e52]')}`}>
-                                 <span className={`text-[8px] sm:text-[9px] font-normal leading-none ${isPaid ? 'text-teal-400/60' : (dayStatus === 'HOLIDAY' ? 'text-[#383e52]' : 'text-[#8a93a6]/60')}`}>{day}</span>
-                                 {dayRate > 0 && <span className={`text-[8px] sm:text-[11px] font-bold leading-none ${isPaid ? 'text-teal-400' : 'text-[#8a93a6]'}`}>{dayRate.toFixed(2)}</span>}
-                               </div>
-                             );
-                           }
-                           return (
-                             <form key={day} action={toggleBsklPayment} className="aspect-square">
-                               <input type="hidden" name="contract_id" value={c.id} />
-                               <input type="hidden" name="date" value={dateStr} />
-                               <input type="hidden" name="amount" value={dayRate} />
-                               <input type="hidden" name="isPaid" value={String(isPaid)} />
-                               <button type="submit" className={`w-full h-full rounded flex flex-col items-center justify-center transition-all border p-0.5 sm:p-1 gap-0.5 ${isPaid ? 'bg-teal-500/10 border-teal-500/30 hover:bg-teal-500/20' : (dayStatus === 'HOLIDAY' ? 'bg-[#0b0e14] border-[#272b38]/40 cursor-default' : 'bg-[#161a23] border-[#383e52] hover:border-amber-500/40')}`}>
-                                 <span className={`text-[8px] sm:text-[9px] font-normal leading-none ${isPaid ? 'text-teal-400/60' : (dayStatus === 'HOLIDAY' ? 'text-[#383e52]' : 'text-[#8a93a6]/60')}`}>{day}</span>
-                                 {dayRate > 0 && <span className={`text-[8px] sm:text-[11px] font-bold leading-none ${isPaid ? 'text-teal-400' : 'text-[#8a93a6]'}`}>{dayRate.toFixed(2)}</span>}
-                               </button>
-                             </form>
-                           );
-                        }
-                        return (
-                          <a key={day} href={`?month=${currentSelectedMonth}&bsklMonth=${bsklSelectedMonth}&bsklModal=${dateStr}${isEditing ? '&edit=true' : ''}`} className="aspect-square rounded flex flex-col items-center justify-center transition-all border bg-[#161a23] border-[#383e52] hover:border-amber-500/40 p-0.5 sm:p-1 gap-0.5">
-                             <span className="text-[8px] sm:text-[9px] font-normal text-[#8a93a6]/60 leading-none">{day}</span>
-                             {dayContracts.map((cc: any) => {
-                                const dd = getDayStatus(cc, dateStr);
-                                const paid = dd.status === 'COLLECTED';
-                                return <span key={cc.id} className={`text-[8px] md:text-[9px] font-bold leading-none ${paid ? 'text-teal-400' : 'text-[#8a93a6]'}`}>{dd.rate.toFixed(2)}</span>
-                             })}
-                          </a>
-                        )
-                      })}
-                    </div>
-                    <div className="flex gap-3 sm:gap-4 mt-6 justify-center text-[9px] font-bold text-[#8a93a6] uppercase tracking-widest flex-wrap">
-                      <span className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded bg-[#161a23] border border-[#383e52]"></div> Trading Day</span>
-                      <span className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded bg-teal-500/10 border border-teal-500/30"></div> Collected</span>
-                      <span className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded bg-[#0b0e14] border border-[#272b38]/50"></div> Closed / Holiday</span>
-                    </div>
+                  <div className="flex gap-3 sm:gap-4 px-3 sm:px-6 pb-3 sm:pb-6 justify-center text-[9px] font-bold text-[#8a93a6] uppercase tracking-widest flex-wrap">
+                    <span className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded bg-[#161a23] border border-[#383e52]"></div> Trading Day</span>
+                    <span className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded bg-teal-500/10 border border-teal-500/30"></div> Collected</span>
+                    <span className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded bg-[#0b0e14] border border-[#272b38]/50"></div> Closed / Holiday</span>
                   </div>
                 </div>
               </div>
